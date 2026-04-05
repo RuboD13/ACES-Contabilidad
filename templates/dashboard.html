@@ -1,0 +1,319 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — ACES Contabilidad{% endblock %}
+{% block topbar_title %}
+  <span class="page-title"><i class="bi bi-grid-1x2-fill me-2"></i>Dashboard</span>
+  <span class="period-chip">
+    <i class="bi bi-{% if current.tipo == 'banco' %}bank{% else %}cash-coin{% endif %} me-1"></i>
+    {{ current.name }}
+  </span>
+{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('transactions.transactions') }}?period={{ current.id }}" class="btn-ghost-sm">
+    <i class="bi bi-list-ul me-1"></i>Ver transacciones
+  </a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filter bar -->
+<div class="filter-bar" id="filterBar">
+  <div class="filter-bar-inner">
+    <div class="filter-group">
+      <label class="filter-label">Tipo</label>
+      <div class="segmented-control" id="tipoFilter">
+        <button class="seg-btn active" data-value="">Todos</button>
+        <button class="seg-btn" data-value="income">Ingresos</button>
+        <button class="seg-btn" data-value="expense">Gastos</button>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Desde</label>
+      <input type="date" class="filter-input" id="filterDateFrom">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Hasta</label>
+      <input type="date" class="filter-input" id="filterDateTo">
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-label">Importe mín.</label>
+      <input type="number" class="filter-input" id="filterMinImp" placeholder="0" step="0.01">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Importe máx.</label>
+      <input type="number" class="filter-input" id="filterMaxImp" placeholder="∞" step="0.01">
+    </div>
+
+    <button class="filter-clear d-none" id="clearFiltersBtn" onclick="clearFilters()">
+      <i class="bi bi-x-circle me-1"></i>Limpiar
+    </button>
+  </div>
+  <!-- Active filter chips -->
+  <div class="filter-chips" id="filterChips"></div>
+</div>
+
+<!-- KPI Cards — Row 1 -->
+<div class="kpi-grid" id="kpiGrid">
+  <div class="kpi-card kpi-income" id="kpi-ingresos">
+    <div class="kpi-icon"><i class="bi bi-arrow-down-circle-fill"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-label">Ingresos Totales</div>
+      <div class="kpi-value" id="val-ingresos">—</div>
+      <div class="kpi-sub" id="sub-ingresos"></div>
+    </div>
+    <div class="kpi-trend" id="trend-ingresos"></div>
+  </div>
+
+  <div class="kpi-card kpi-expense" id="kpi-gastos">
+    <div class="kpi-icon"><i class="bi bi-arrow-up-circle-fill"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-label">Gastos Totales</div>
+      <div class="kpi-value" id="val-gastos">—</div>
+      <div class="kpi-progress-wrap">
+        <div class="kpi-progress-bar" id="bar-gastos"></div>
+      </div>
+    </div>
+    <div class="kpi-trend" id="trend-gastos"></div>
+  </div>
+
+  <div class="kpi-card kpi-profit" id="kpi-beneficio">
+    <div class="kpi-icon"><i class="bi bi-graph-up-arrow"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-label">Beneficio Neto</div>
+      <div class="kpi-value" id="val-beneficio">—</div>
+      <div class="kpi-sub" id="sub-beneficio"></div>
+    </div>
+    <div class="kpi-trend" id="trend-beneficio"></div>
+  </div>
+
+  <div class="kpi-card kpi-best" id="kpi-best">
+    <div class="kpi-icon"><i class="bi bi-star-fill"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-label">Mejor Fuente</div>
+      <div class="kpi-value" id="val-best">—</div>
+      <div class="kpi-sub" id="sub-best"></div>
+    </div>
+  </div>
+
+  <div class="kpi-card kpi-ticket" id="kpi-ticket">
+    <div class="kpi-icon"><i class="bi bi-receipt"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-label">Ticket Medio</div>
+      <div class="kpi-value" id="val-ticket">—</div>
+      <div class="kpi-sub">por operación de ingreso</div>
+    </div>
+  </div>
+
+  <div class="kpi-card kpi-ops" id="kpi-ops">
+    <div class="kpi-icon"><i class="bi bi-activity"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-label">Operaciones</div>
+      <div class="kpi-value" id="val-ops">—</div>
+      <div class="kpi-sub" id="sub-ops"></div>
+    </div>
+    <div class="kpi-alert d-none" id="alert-sincat"></div>
+  </div>
+</div>
+
+<!-- Transactions list with multi-select (moved above charts) -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card-glass">
+      <div class="card-glass-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span><i class="bi bi-list-ul me-2 text-accent-blue"></i>Transacciones del período</span>
+        <div class="d-flex align-items-center gap-2">
+          <span class="text-muted small" id="dashTxCount"></span>
+          <button class="btn-xs-ghost" id="selectAllBtn" onclick="dashSelectAll()">
+            <i class="bi bi-check-all me-1"></i>Seleccionar todo
+          </button>
+        </div>
+      </div>
+      <!-- Filter bar immediately above transaction list -->
+      <div class="dash-tx-filter-bar">
+        <div class="search-input-wrap flex-grow-1" style="min-width:180px">
+          <i class="bi bi-search search-icon"></i>
+          <input type="text" class="filter-input ps-4 w-100" id="dashTxSearch"
+                 placeholder="Buscar concepto, categoría, fecha, importe...">
+        </div>
+        <div class="segmented-control sm" id="dashTxTipo">
+          <button class="seg-btn active" data-value="">Todos</button>
+          <button class="seg-btn" data-value="income">Ingresos</button>
+          <button class="seg-btn" data-value="expense">Gastos</button>
+        </div>
+        <button class="filter-clear" id="dashTxClearBtn" onclick="dashClearTxFilter()" style="display:none">
+          <i class="bi bi-x-circle me-1"></i>Limpiar
+        </button>
+      </div>
+      <div class="card-glass-body p-0">
+        <div id="dashTxLoading" class="text-center py-5">
+          <div class="spinner-border" role="status" style="color:var(--blue)"></div>
+          <p class="text-muted mt-2 small">Cargando transacciones...</p>
+        </div>
+        <div id="dashTxEmpty" class="text-center py-5 d-none">
+          <i class="bi bi-inbox" style="font-size:2rem;color:var(--text-muted)"></i>
+          <p class="text-muted mt-2 small">Sin transacciones en este período.</p>
+        </div>
+        <div class="table-responsive" id="dashTxWrap" style="display:none">
+          <table class="table table-dark-custom mb-0">
+            <thead>
+              <tr>
+                <th style="width:36px">
+                  <input type="checkbox" id="dashMasterCb" onchange="dashToggleAll(this)"
+                         style="cursor:pointer;accent-color:var(--blue)">
+                </th>
+                <th style="width:100px">Fecha</th>
+                <th>Concepto</th>
+                <th style="width:130px" class="text-end">Importe</th>
+                <th style="width:130px" class="text-end">Saldo</th>
+                <th style="width:170px">Categoría</th>
+              </tr>
+            </thead>
+            <tbody id="dashTxBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-4 mt-1">
+  <div class="col-xl-8">
+    <div class="card-glass h-100">
+      <div class="card-glass-header">
+        <i class="bi bi-bar-chart-fill me-2 text-accent-green"></i>
+        Ingresos por fuente
+      </div>
+      <div class="card-glass-body">
+        <canvas id="chartIngresos" height="280"></canvas>
+        <div class="chart-empty d-none" id="emptyIngresos">
+          <i class="bi bi-bar-chart"></i><p>Sin datos de ingresos</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-4">
+    <div class="card-glass h-100">
+      <div class="card-glass-header">
+        <i class="bi bi-pie-chart-fill me-2 text-accent-red"></i>
+        Distribución de gastos
+      </div>
+      <div class="card-glass-body d-flex flex-column align-items-center justify-content-center">
+        <div class="doughnut-wrap">
+          <canvas id="chartGastos"></canvas>
+          <div class="doughnut-center" id="doughnutCenter"></div>
+        </div>
+        <div class="doughnut-legend" id="doughnutLegend"></div>
+        <div class="chart-empty d-none" id="emptyGastos">
+          <i class="bi bi-pie-chart"></i><p>Sin datos de gastos</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Evolution chart (multi-period) -->
+<div class="row g-4 mt-1" id="evolutionRow" style="display:none!important">
+  <div class="col-12">
+    <div class="card-glass">
+      <div class="card-glass-header">
+        <i class="bi bi-graph-up me-2 text-accent-blue"></i>
+        Evolución mensual
+      </div>
+      <div class="card-glass-body">
+        <canvas id="chartEvolution" height="120"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Reconciliation -->
+<div class="row g-4 mt-1">
+  <div class="col-12" id="reconciliationSection">
+    <!-- injected by JS -->
+  </div>
+</div>
+
+<!-- Sub-metrics table -->
+<div class="row g-4 mt-1">
+  <div class="col-12">
+    <div class="card-glass">
+      <div class="card-glass-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-table me-2 text-accent-violet"></i>Desglose detallado</span>
+        <div class="segmented-control sm" id="submetricsFilter">
+          <button class="seg-btn active" data-value="all">Todo</button>
+          <button class="seg-btn" data-value="income">Ingresos</button>
+          <button class="seg-btn" data-value="expense">Gastos</button>
+        </div>
+      </div>
+      <div class="card-glass-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark-custom mb-0" id="submetricsTable">
+            <thead>
+              <tr>
+                <th>Categoría</th>
+                <th class="text-end">Importe</th>
+                <th class="text-end">% Total</th>
+                <th class="text-end">Operaciones</th>
+                <th class="text-end">Ticket Medio</th>
+                <th class="text-end">vs Anterior</th>
+              </tr>
+            </thead>
+            <tbody id="submetricsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Selection toolbar (fixed bottom, appears when rows selected) -->
+<div class="selection-toolbar d-none" id="selectionToolbar">
+  <div class="sel-info">
+    <i class="bi bi-check2-square me-2" style="color:var(--blue)"></i>
+    <span id="selCount">0</span> sel.
+  </div>
+  <div class="sel-metrics">
+    <div class="sel-metric">
+      <span class="sel-label">Saldo inicio</span>
+      <span class="sel-val text-muted" id="selSaldoInicio">—</span>
+    </div>
+    <div class="sel-metric">
+      <span class="sel-label">Saldo final</span>
+      <span class="sel-val text-muted" id="selSaldoFinal">—</span>
+    </div>
+    <div class="sel-metric sel-divider">
+      <span class="sel-label">Ingresos</span>
+      <span class="sel-val text-accent-green" id="selIngresos">—</span>
+    </div>
+    <div class="sel-metric">
+      <span class="sel-label">Gastos</span>
+      <span class="sel-val text-accent-red" id="selGastos">—</span>
+    </div>
+    <div class="sel-metric">
+      <span class="sel-label">Neto</span>
+      <span class="sel-val" id="selNeto">—</span>
+    </div>
+    <div class="sel-metric">
+      <span class="sel-label">Ticket medio</span>
+      <span class="sel-val" id="selTicket">—</span>
+    </div>
+  </div>
+  <button class="btn-ghost-custom sm" onclick="dashClearSelection()">
+    <i class="bi bi-x me-1"></i>Limpiar
+  </button>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+  const PERIOD_ID = {{ current.id }};
+  const PERIOD_ACCOUNT_ID = {{ current.account_id if current.account_id else current_account_id }};
+  const PERIOD_DATE_FROM = "{{ current.date_from }}";
+  const PERIOD_DATE_TO   = "{{ current.date_to }}";
+</script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

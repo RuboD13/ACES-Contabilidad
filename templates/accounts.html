@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+{% block title %}Cuentas — ACES Contabilidad{% endblock %}
+{% block topbar_title %}<span class="page-title"><i class="bi bi-journals me-2"></i>Libros de Contabilidad</span>{% endblock %}
+{% block topbar_actions %}
+<button class="btn-primary-custom sm" onclick="openNewModal()">
+  <i class="bi bi-plus-lg me-1"></i>Nueva cuenta
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+  {% for acc in account_list %}
+  <div class="col-xl-4 col-md-6">
+    <div class="account-card" id="acc-card-{{ acc.id }}">
+      <div class="account-card-header">
+        <div class="account-card-icon" style="background:{{ acc.color }}22; color:{{ acc.color }}">
+          <i class="bi bi-{{ acc.icon }}"></i>
+        </div>
+        <div class="account-card-info">
+          <div class="account-card-name">{{ acc.name }}</div>
+          {% if acc.description %}
+          <div class="account-card-desc">{{ acc.description }}</div>
+          {% endif %}
+          {% if acc.iban %}
+          <div class="account-card-desc" style="font-family:monospace;font-size:11px;color:var(--text-muted);letter-spacing:.04em">
+            {{ acc.iban }}
+          </div>
+          {% endif %}
+        </div>
+        <div class="account-card-actions">
+          <button class="icon-btn" onclick="openEditModal({{ acc.id }}, '{{ acc.name|e }}', '{{ acc.description|e }}', '{{ acc.color }}', '{{ acc.icon }}', '{{ acc.iban|default('')|e }}')" title="Editar">
+            <i class="bi bi-pencil"></i>
+          </button>
+          {% if account_list|length > 1 %}
+          <button class="icon-btn danger" onclick="deleteAccount({{ acc.id }}, '{{ acc.name|e }}')" title="Eliminar">
+            <i class="bi bi-trash3"></i>
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      <div class="account-card-stats">
+        <div class="account-stat">
+          <span class="account-stat-val">{{ acc.period_count }}</span>
+          <span class="account-stat-label">períodos</span>
+        </div>
+        <div class="account-stat">
+          <span class="account-stat-val">{{ acc.tx_count }}</span>
+          <span class="account-stat-label">transacciones</span>
+        </div>
+        <div class="account-stat ms-auto">
+          <a href="{{ url_for('dashboard.dashboard') }}?account={{ acc.id }}"
+             class="btn-xs-ghost">
+            <i class="bi bi-arrow-right me-1"></i>Ver dashboard
+          </a>
+        </div>
+      </div>
+      <!-- Color strip -->
+      <div class="account-card-strip" style="background:{{ acc.color }}"></div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- New account placeholder card -->
+  <div class="col-xl-4 col-md-6">
+    <div class="account-card account-card-new" onclick="openNewModal()">
+      <div class="account-card-new-inner">
+        <div class="account-new-icon"><i class="bi bi-plus-circle"></i></div>
+        <div class="account-new-text">Nueva cuenta</div>
+        <div class="account-new-sub">Crea un nuevo libro de contabilidad</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── New / Edit Modal ─────────────────────────────────────────────────── -->
+<div class="modal fade modal-dark" id="accountModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-content-dark">
+      <div class="modal-header-dark">
+        <span class="modal-title-dark" id="modalTitle">Nueva cuenta</span>
+        <button class="btn-close-dark" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-body-dark">
+        <input type="hidden" id="editAccountId" value="">
+
+        <div class="mb-3">
+          <label class="form-label-custom">Nombre</label>
+          <input class="form-control-custom" id="accName" placeholder="Ej: ACES Alquiler, Gastos Personales…" maxlength="80">
+        </div>
+        <div class="mb-3">
+          <label class="form-label-custom">Descripción (opcional)</label>
+          <input class="form-control-custom" id="accDesc" placeholder="Breve descripción del libro" maxlength="200">
+        </div>
+        <div class="mb-3">
+          <label class="form-label-custom">IBAN (opcional)</label>
+          <input class="form-control-custom" id="accIban" placeholder="ES00 0000 0000 0000 0000 0000" maxlength="40" style="font-family:monospace;letter-spacing:.04em">
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label-custom">Color</label>
+          <div class="color-picker-grid" id="colorPicker">
+            {% for c in colors %}
+            <div class="color-swatch" data-color="{{ c }}" style="background:{{ c }}" onclick="selectColor('{{ c }}')"></div>
+            {% endfor %}
+          </div>
+          <input type="hidden" id="accColor" value="{{ colors[0] }}">
+        </div>
+
+        <div class="mb-1">
+          <label class="form-label-custom">Icono</label>
+          <div class="icon-picker-grid" id="iconPicker">
+            {% for ic in icons %}
+            <div class="icon-swatch" data-icon="{{ ic }}" onclick="selectIcon('{{ ic }}')">
+              <i class="bi bi-{{ ic }}"></i>
+            </div>
+            {% endfor %}
+          </div>
+          <input type="hidden" id="accIcon" value="{{ icons[0] }}">
+        </div>
+      </div>
+      <div class="modal-footer-dark">
+        <button class="btn-ghost-custom sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-primary-custom sm" onclick="saveAccount()">
+          <i class="bi bi-check2 me-1"></i>Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let _accountModal = null;
+function _getAccountModal() {
+  if (!_accountModal && typeof bootstrap !== 'undefined')
+    _accountModal = new bootstrap.Modal(document.getElementById('accountModal'));
+  return _accountModal;
+}
+
+function openNewModal() {
+  document.getElementById('modalTitle').textContent = 'Nueva cuenta';
+  document.getElementById('editAccountId').value = '';
+  document.getElementById('accName').value = '';
+  document.getElementById('accDesc').value = '';
+  document.getElementById('accIban').value = '';
+  selectColor('{{ colors[0] }}');
+  selectIcon('{{ icons[0] }}');
+  _getAccountModal()?.show();
+}
+
+function openEditModal(id, name, desc, color, icon, iban) {
+  document.getElementById('modalTitle').textContent = 'Editar cuenta';
+  document.getElementById('editAccountId').value = id;
+  document.getElementById('accName').value = name;
+  document.getElementById('accDesc').value = desc;
+  document.getElementById('accIban').value = iban || '';
+  selectColor(color);
+  selectIcon(icon);
+  _getAccountModal()?.show();
+}
+
+function selectColor(c) {
+  document.getElementById('accColor').value = c;
+  document.querySelectorAll('.color-swatch').forEach(s => {
+    s.classList.toggle('selected', s.dataset.color === c);
+  });
+}
+
+function selectIcon(ic) {
+  document.getElementById('accIcon').value = ic;
+  document.querySelectorAll('.icon-swatch').forEach(s => {
+    s.classList.toggle('selected', s.dataset.icon === ic);
+  });
+}
+
+async function saveAccount() {
+  const id    = document.getElementById('editAccountId').value;
+  const name  = document.getElementById('accName').value.trim();
+  if (!name) { document.getElementById('accName').focus(); return; }
+
+  const payload = {
+    name,
+    description: document.getElementById('accDesc').value.trim(),
+    color: document.getElementById('accColor').value,
+    icon:  document.getElementById('accIcon').value,
+    iban:  document.getElementById('accIban').value.trim(),
+  };
+
+  const url    = id ? `/api/accounts/${id}` : '/api/accounts';
+  const method = id ? 'PUT' : 'POST';
+
+  const res = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) {
+    _getAccountModal()?.hide();
+    location.reload();
+  } else {
+    const err = await res.json();
+    alert(err.error || 'Error al guardar');
+  }
+}
+
+async function deleteAccount(id, name) {
+  if (!confirm(`¿Eliminar la cuenta "${name}"? Se eliminarán todos sus períodos y transacciones.`)) return;
+  const res = await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    location.reload();
+  } else {
+    const err = await res.json();
+    alert(err.error || 'Error al eliminar');
+  }
+}
+</script>
+{% endblock %}

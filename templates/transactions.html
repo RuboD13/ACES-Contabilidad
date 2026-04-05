@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+{% block title %}Transacciones — ACES Contabilidad{% endblock %}
+{% block topbar_title %}
+  <span class="page-title"><i class="bi bi-list-ul me-2"></i>Transacciones</span>
+{% endblock %}
+{% block topbar_actions %}
+  <span class="text-muted small" id="txCount"></span>
+{% endblock %}
+
+{% block content %}
+
+<!-- ─── Period file list ───────────────────────────────────────────────────── -->
+<div class="card-glass mb-3">
+  <div class="card-glass-header d-flex align-items-center justify-content-between">
+    <span>
+      <i class="bi bi-folder2-open me-2 text-accent-blue"></i>Archivos importados
+      <span class="info-tooltip ms-1" data-tip="Lista de todos los extractos bancarios importados. Haz clic en uno para ver sus transacciones en detalle.">
+        <i class="bi bi-info-circle text-muted" style="font-size:11px"></i>
+      </span>
+    </span>
+    <div class="d-flex align-items-center gap-3">
+      <span class="text-muted small" id="periodListCount"></span>
+      <a href="{{ url_for('upload.upload_form') }}?account={{ current_account_id }}" class="btn-xs-ghost">
+        <i class="bi bi-plus me-1"></i>Importar
+      </a>
+      <button class="btn-xs-ghost" id="pflCollapseBtn" onclick="togglePflCollapse()" title="Contraer lista">
+        <i class="bi bi-chevron-up" id="pflCollapseIcon"></i>
+      </button>
+    </div>
+  </div>
+  <div id="periodListCollapse">
+    <div class="card-glass-body p-0" id="periodListBody">
+      <div class="text-center py-4 text-muted small">
+        <div class="spinner-border spinner-border-sm me-2" role="status"></div>Cargando…
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Transactions section (shown after selecting a period) ─────────────── -->
+<div id="txSection" style="display:none">
+
+  <!-- Section header -->
+  <div class="card-glass mb-3">
+    <div class="d-flex align-items-center gap-3 px-4 py-3">
+      <div class="pfl-icon">
+        <i class="bi bi-list-ul"></i>
+      </div>
+      <div class="flex-grow-1 min-w-0">
+        <div class="fw-600" id="txSectionTitle"></div>
+        <div class="text-muted small" id="txSectionMeta"></div>
+      </div>
+      <button class="btn-ghost-custom sm" onclick="closeTxSection()">
+        <i class="bi bi-x me-1"></i>Cerrar
+      </button>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar mb-0">
+    <div class="filter-bar-inner flex-wrap gap-2">
+      <div class="filter-group flex-grow-1" style="min-width:180px">
+        <label class="filter-label">Buscar</label>
+        <div class="search-input-wrap">
+          <i class="bi bi-search search-icon"></i>
+          <input type="text" class="filter-input ps-4" id="searchInput" placeholder="Buscar en concepto...">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Tipo</label>
+        <div class="segmented-control" id="tipoFilter">
+          <button class="seg-btn active" data-value="">Todos</button>
+          <button class="seg-btn" data-value="income">Ingresos</button>
+          <button class="seg-btn" data-value="expense">Gastos</button>
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Categoría</label>
+        <select class="filter-input" id="categoryFilter">
+          <option value="">Todas</option>
+          {% for r in rules %}
+          <option value="{{ r.category_key }}">{{ r.category_label }}</option>
+          {% endfor %}
+          <option value="sin_categoria">Sin categoría</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Etiqueta</label>
+        <select class="filter-input" id="tagFilter">
+          <option value="">Todas</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">
+          <input type="checkbox" id="uncatOnly" class="me-1"> Solo sin categ.
+        </label>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label">Desde</label>
+        <input type="date" class="filter-input" id="dateFrom">
+      </div>
+      <div class="filter-group">
+        <label class="filter-label">Hasta</label>
+        <input type="date" class="filter-input" id="dateTo">
+      </div>
+
+      <button class="filter-clear" id="clearBtn" onclick="clearFilters()" style="display:none">
+        <i class="bi bi-x-circle me-1"></i>Limpiar
+      </button>
+    </div>
+  </div>
+
+  <!-- Transactions table -->
+  <div class="card-glass mt-3">
+    <div class="card-glass-body p-0">
+      <div id="loadingState" class="text-center py-5">
+        <div class="spinner-border" role="status" style="color:var(--blue)"></div>
+        <p class="text-muted mt-2 small">Cargando transacciones...</p>
+      </div>
+      <div id="emptyState" class="text-center py-5 d-none">
+        <i class="bi bi-inbox" style="font-size:2.5rem;color:var(--text-muted)"></i>
+        <p class="text-muted mt-2">No se encontraron transacciones con estos filtros.</p>
+      </div>
+      <div class="table-responsive" id="tableWrap" style="display:none">
+        <table class="table table-dark-custom mb-0" id="txTable">
+          <thead>
+            <tr>
+              <th style="width:100px">Fecha</th>
+              <th>Concepto</th>
+              <th style="width:120px" class="text-end">Importe</th>
+              <th style="width:110px" class="text-end">
+                Saldo
+                <span class="info-tooltip" data-tip="Saldo de la cuenta tras esta operación.">
+                  <i class="bi bi-info-circle ms-1 text-muted" style="font-size:11px"></i>
+                </span>
+              </th>
+              <th style="width:190px">Categoría</th>
+              <th style="width:70px" class="text-center">
+                Docs
+                <span class="info-tooltip" data-tip="Facturas adjuntas a esta transacción.">
+                  <i class="bi bi-info-circle ms-1 text-muted" style="font-size:11px"></i>
+                </span>
+              </th>
+              <th style="width:50px"></th>
+            </tr>
+          </thead>
+          <tbody id="txBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end #txSection -->
+
+<!-- ─── Transaction Detail Modal ─────────────────────────────────────────── -->
+<div class="modal fade modal-dark" id="txDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:560px">
+    <div class="modal-content modal-content-dark">
+      <div class="modal-header-dark">
+        <div>
+          <span class="modal-title-dark" id="txDetailTitle">Detalle de transacción</span>
+          <div class="text-muted small mt-1" id="txDetailMeta"></div>
+        </div>
+        <button class="btn-close-dark" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-body-dark" id="txDetailBody"></div>
+      <div class="modal-footer-dark">
+        <button class="btn-ghost-custom sm" data-bs-dismiss="modal">Cerrar</button>
+        <button class="btn-primary-custom sm" onclick="saveTxDetail()">
+          <i class="bi bi-check2 me-1"></i>Guardar cambios
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Add Factura Modal ─────────────────────────────────────────────────── -->
+<div class="modal fade modal-dark" id="facturaModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:500px">
+    <div class="modal-content modal-content-dark">
+      <div class="modal-header-dark">
+        <span class="modal-title-dark"><i class="bi bi-paperclip me-2"></i>Adjuntar factura</span>
+        <button class="btn-close-dark" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-body-dark">
+        <input type="hidden" id="facturaTxId">
+        <div class="mb-3">
+          <label class="form-label-custom">Archivo (PDF, JPG, PNG)</label>
+          <input type="file" class="form-control-custom" id="facturaFile"
+                 accept=".pdf,.jpg,.jpeg,.png,.webp">
+        </div>
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label-custom">Fecha de factura</label>
+            <input type="date" class="form-control-custom" id="facturaFecha">
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">Número de factura</label>
+            <input type="text" class="form-control-custom" id="facturaNumero" placeholder="F-2025-001">
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">Proveedor / Emisor</label>
+            <input type="text" class="form-control-custom" id="facturaProveedor" placeholder="Nombre empresa">
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">Importe (€)</label>
+            <input type="text" class="form-control-custom" id="facturaImporte" placeholder="0,00">
+          </div>
+        </div>
+        <div class="mt-3">
+          <label class="form-label-custom">Notas</label>
+          <textarea class="form-control-custom" id="facturaNotas" rows="2"
+                    placeholder="Observaciones opcionales..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer-dark">
+        <button class="btn-ghost-custom sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-primary-custom sm" onclick="uploadFactura()" id="facturaSubmitBtn">
+          <i class="bi bi-upload me-1"></i>Adjuntar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Drag overlay ───────────────────────────────────────────────────── -->
+<div id="dragOverlay" class="drag-overlay" style="display:none">
+  <div class="drag-overlay-content">
+    <i class="bi bi-file-earmark-arrow-down" style="font-size:3rem;color:var(--blue)"></i>
+    <div class="mt-2 fw-600">Suelta el archivo para adjuntarlo</div>
+    <div class="text-muted small mt-1">Se abrirá el formulario de factura</div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const PERIOD_ID  = {{ current.id if current else 'null' }};
+  const ACCOUNT_ID = {{ current_account_id }};
+  const RULES = [
+    {% for r in rules %}
+    { key: "{{ r.category_key }}", label: "{{ r.category_label }}", tipo: "{{ r.category_type }}" },
+    {% endfor %}
+    { key: "sin_categoria", label: "Sin categoría", tipo: "" }
+  ];
+</script>
+<script src="{{ url_for('static', filename='js/transactions.js') }}"></script>
+{% endblock %}

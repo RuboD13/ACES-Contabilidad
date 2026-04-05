@@ -1,0 +1,150 @@
+================================================================================
+                 ACES CONTABILIDAD - INSTRUCCIONES RAPIDAS
+================================================================================
+
+ESTADO: El instalador se está generando en background...
+Tiempo estimado: 30-60 minutos (primera vez)
+
+================================================================================
+PASO 1: GENERAR EL INSTALADOR
+================================================================================
+
+Una vez que el proceso termine, tendrás:
+
+✓ dist/ACES_Contabilidad.exe   (200-300 MB) - El ejecutable principal
+✓ install.bat                  - Script de instalación automática
+✓ uninstall.bat                - Script de desinstalación
+✓ README_INSTALACION.txt       - Manual de uso
+✓ INSTALADOR.md                - Documentación completa
+
+Monitorea el progreso ejecutando en otra ventana:
+  dir dist /
+
+Espera hasta que veas ACES_Contabilidad.exe (200+ MB)
+
+================================================================================
+PASO 2: EMPAQUETAR PARA ENVIO (Una vez completado)
+================================================================================
+
+Para crear un ZIP listo para enviar:
+
+1. Abre cmd o PowerShell
+2. Ve al directorio del proyecto:
+   cd "F:\CLAUDE CODE\PROYECTO C de CONTABILIDAD"
+
+3. Ejecuta:
+   python package_installer.py
+
+Esto crea un archivo .ZIP de ~200 MB listo para enviar por email o nube.
+
+================================================================================
+PASO 3: INSTALAR EN OTRA MAQUINA
+================================================================================
+
+En la máquina destino:
+
+1. Descarga el ZIP que creaste
+2. Extrae el contenido en cualquier carpeta (ej: C:\DescargerrorDescarga)
+3. Abre cmd o PowerShell
+4. Ve a la carpeta extraída
+5. Ejecuta: install.bat
+
+¡Automáticamente se instalará en Archivos de Programa!
+
+================================================================================
+ALTERNATIVA: USO DIRECTO SIN INSTALADOR
+================================================================================
+
+Si solo quieres un ejecutable portátil:
+
+1. Copia dist/ACES_Contabilidad.exe a una USB o disco externo
+2. En cualquier máquina, simplemente ejecútalo
+3. No requiere instalación previas (Python incluido)
+4. Los datos se guardan en aces.db junto al ejecutable
+
+================================================================================
+MONITOREAR PROGRESO
+================================================================================
+
+Para ver qué está haciendo PyInstaller:
+
+Opción A - Ver archivo de salida:
+  tail -f "C:\Users\Ru\AppData\Local\Temp\claude\...\bzmg5kdr9.output"
+
+Opción B - Ver si aparecen archivos:
+  dir /S
+
+Opción C - Ver en el Administrador de tareas:
+  - Busca procesos Python
+  - Verifica uso de CPU (debe estar alto durante compilación)
+
+================================================================================
+ESTIMACIONES DE TIEMPO
+================================================================================
+
+Primera ejecución:
+  - Análisis de archivos:    5-10 min
+  - Compilación:             15-30 min
+  - Empaquetamiento:         5-10 min
+  - Total:                   30-60 min
+
+Ejecuciones posteriores serán más rápidas si hay cambios menores.
+
+================================================================================
+VERIFICACION FINAL
+================================================================================
+
+Cuando termine el script, deberías ver:
+
+[==========================================================]
+  Instalador creado exitosamente
+[==========================================================]
+
+Y un resumen de archivos generados.
+
+Si vez errores:
+1. Verifica que todos los archivos fuente existen
+2. Asegúrate de que hay 5+ GB libres en disco (compilación temporal)
+3. Cierra antivirus temporalmente (puede interferir)
+4. Intenta nuevamente ejecutando create_installer.py
+
+================================================================================
+SIGUIENTES PASOS
+================================================================================
+
+Una vez completado:
+
+1. ✓ Ejecuta: python package_installer.py
+   Esto crea ACES_Contabilidad_Instalador_YYYYMMDD.zip
+
+2. ✓ Envía el ZIP a quien necesite instalar
+
+3. ✓ Comparte el README_INSTALACION.txt con instrucciones
+
+4. ✓ Opcionalmente, copias los scripts .bat para facilitar distribución
+
+================================================================================
+SOPORTE
+================================================================================
+
+Si algo falla durante la generación del instalador:
+
+1. Verifica espacio en disco: al menos 5-10 GB temporales
+2. Cierra aplicaciones que usen el puerto 5000
+3. Ejecuta como Administrador: runas /user:Administrator cmd
+4. Intenta en una carpeta sin caracteres especiales
+5. Revisa que Python esté correctamente instalado: python --version
+
+Para problemas en la instalación en otra máquina:
+- Consulta INSTALADOR.md
+- Lee README_INSTALACION.txt
+- Ejecuta install.bat como Administrador
+
+================================================================================
+
+¡ESPERA A QUE TERMINE! No cierres esta ventana ni el proceso Python.
+
+Status: GENERANDO...
+ID Proceso: bzmg5kdr9
+
+================================================================================

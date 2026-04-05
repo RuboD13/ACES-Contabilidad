@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pip install flask pandas --quiet)",
+      "Bash(python -m ensurepip --upgrade)",
+      "Bash(python -c \"import flask; import pandas; print\\(''flask'', flask.__version__, ''| pandas'', pandas.__version__\\)\")",
+      "Bash(python -c \":*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(python -m pip install openpyxl xlrd)",
+      "Bash(python -c \"import xlrd; print\\(''xlrd'', xlrd.__version__\\)\")",
+      "Bash(find 'F:/CLAUDE CODE/PROYECTO C de CONTABILIDAD/uploads' -name *.xls -o -name *.xlsx)",
+      "Bash(python -c \"from modules.csv_parser import parse_file, detect_periods; print\\(''OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''routes/transactions.py''\\).read\\(\\)\\); print\\(''transactions.py OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''routes/opciones.py''\\).read\\(\\)\\); print\\(''opciones.py OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''database/db.py''\\).read\\(\\)\\); print\\(''db.py OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''app.py''\\).read\\(\\)\\); print\\(''app.py OK''\\)\")",
+      "Bash(python -m PyInstaller --onefile --windowed --name=ACES_Contabilidad --distpath=dist --buildpath=build --add-data \"templates:templates\" --add-data \"static:static\" --add-data \"database:database\" --add-data \"modules:modules\" --add-data \"routes:routes\" --add-data \"config.py:.\" --collect-all=flask --collect-all=pandas --console app.py)",
+      "Bash(python -m PyInstaller --onefile --name=ACES_Contabilidad app.py)",
+      "Bash(__NEW_LINE_73f75282fe074b28__ echo:*)",
+      "Bash(gh --version)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo:*)"
+    ]
+  }
+}

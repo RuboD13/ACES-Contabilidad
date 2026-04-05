@@ -1,0 +1,227 @@
+================================================================================
+          CUANDO TERMINE EL BUILD - PASOS FINALES
+================================================================================
+
+El proceso de construccion esta en marcha.
+Cuando veas este archivo actualizado, el instalador estara listo.
+
+================================================================================
+CHECKLIST FINAL (Ejecuta esto cuando termine el build)
+================================================================================
+
+PASO 1 - Crear scripts (30 segundos)
+---------
+cd "F:\CLAUDE CODE\PROYECTO C de CONTABILIDAD"
+python create_scripts.py
+
+Esto crea:
+- install.bat
+- uninstall.bat
+- README_INSTALACION.txt (actualizado)
+
+PASO 2 - Verificar que todo existe (1 minuto)
+---------
+python check_installer.py
+
+Deberia mostrar [OK] en:
+- dist/ACES_Contabilidad.exe (~250 MB)
+- install.bat
+- uninstall.bat
+- README_INSTALACION.txt
+
+PASO 3 - Probar en tu maquina (5-10 minutos)
+---------
+Option A - Con instalador:
+  install.bat
+  (Instala en C:\Archivos de programa\ACES_Contabilidad)
+
+Option B - Ejecucion directa:
+  dist/ACES_Contabilidad.exe
+  (Sin instalar, usa exe directamente)
+
+Resultado esperado:
+- Se abre el navegador en http://localhost:5000
+- Puedes cargar un CSV y ver el dashboard
+- Los datos se guardan en aces.db
+
+PASO 4 - Crear paquete ZIP (3-5 minutos)
+---------
+python finalize_package.py
+
+Crea:
+- ACES_Contabilidad_Instalador_YYYYMMDD_HHMMSS.zip (~200 MB)
+
+Este es el archivo que enviaras a otros usuarios.
+
+PASO 5 - Compartir
+---------
+El ZIP contiene:
+- ACES_Contabilidad.exe
+- install.bat
+- uninstall.bat
+- README_INSTALACION.txt
+- Documentacion adicional
+
+Envia por:
+- Email (si soporta 200+ MB)
+- Google Drive / OneDrive
+- WeTransfer
+- USB / DVD
+- FTP / servidor
+
+================================================================================
+INSTRUCCIONES PARA EL USUARIO FINAL
+================================================================================
+
+Una vez que el usuario recibe el ZIP:
+
+1. Descarga el archivo ACES_Contabilidad_Instalador_*.zip
+
+2. Extrae el contenido en cualquier carpeta
+   (Click derecho > Extraer todo)
+
+3. Abre la carpeta extraida
+
+4. IMPORTANTE:
+   Haz click DERECHO en install.bat
+   Selecciona: Ejecutar como administrador
+
+5. Espera a que termine la instalacion
+
+6. Se creara un acceso directo en el Escritorio
+
+7. Doble-click en el acceso directo para iniciar
+
+8. La app se abrira en http://localhost:5000
+
+================================================================================
+ARCHIVOS IMPORTANTES
+================================================================================
+
+Una vez completado, tendras estos archivos:
+
+EJECUTABLE (usa una sola vez para compilar):
+  F:\...\dist\ACES_Contabilidad.exe (250-300 MB)
+
+DISTRIBUIBLE (envia este ZIP):
+  F:\...\ACES_Contabilidad_Instalador_20260404_HHMMSS.zip (200 MB)
+
+PARA OTROS USUARIOS:
+  README_INSTALACION.txt - Dale esto al usuario
+  INSTALADOR.md - Documentacion tecnica
+  GUIA_DISTRIBUCION.md - Para distribuir a mas usuarios
+
+================================================================================
+AUTOMATIZACION (OPCIONAL)
+================================================================================
+
+Si quieres automatizar los pasos 1-4:
+
+Crea un archivo run_all.bat con:
+
+---
+@echo off
+cls
+echo Paso 1: Creando scripts...
+python create_scripts.py
+echo.
+echo Paso 2: Verificando...
+python check_installer.py
+echo.
+echo Paso 3: Creando paquete ZIP...
+python finalize_package.py
+echo.
+echo Listo!
+pause
+---
+
+Luego solo ejecuta: run_all.bat
+
+================================================================================
+SOPORTE
+================================================================================
+
+SI NO VES dist/ACES_Contabilidad.exe:
+
+1. El build aun esta en progreso
+   - Espera mas tiempo (pueden ser 60+ minutos)
+   - No cierres la ventana
+
+2. Hubo un error:
+   - Verifica 5+ GB libres en disco
+   - Cierra otras aplicaciones
+   - Intenta nuevamente:
+     python build_exe.py
+
+SI EL INSTALADOR NO FUNCIONA EN OTRA MAQUINA:
+
+1. Verificar requisitos:
+   - Windows 7 o superior
+   - 500 MB espacio libre
+   - Permisos de Administrador
+
+2. Ejecutar como Administrador:
+   - Click derecho en install.bat
+   - "Ejecutar como administrador"
+
+3. Desactivar antivirus temporalmente
+
+4. Si el exe no abre:
+   - Intenta ejecutar como Administrador
+   - Actualiza Windows
+   - Copia a disco local (no USB/Red)
+
+================================================================================
+PROXIMAS ACTUALIZACIONES
+================================================================================
+
+Para distribuir una version actualizada:
+
+1. Modifica el codigo (app.py, templates, etc.)
+
+2. Ejecuta nuevamente:
+   python build_exe.py
+   (Toma 30-60 minutos)
+
+3. Repite pasos 1-5 de arriba
+
+4. Envia el nuevo ZIP
+
+Los usuarios simplemente desinstalan la version vieja
+y instalan la nueva. Los datos se conservan automaticamente.
+
+================================================================================
+RESUMEN RAPIDO
+================================================================================
+
+CUANDO TERMINE EL BUILD:
+
+  cd "F:\CLAUDE CODE\PROYECTO C de CONTABILIDAD"
+  python create_scripts.py
+  python check_installer.py
+  python finalize_package.py
+
+RESULTADO:
+  ACES_Contabilidad_Instalador_*.zip listo para distribuir
+
+ENVIA A:
+  El usuario que necesita la aplicacion
+
+USUARIO EJECUTA:
+  1. Extrae el ZIP
+  2. install.bat como Administrador
+  3. Done!
+
+================================================================================
+
+NOTAS IMPORTANTES:
+
+- El .exe contiene Python completo (+250 MB)
+- Primera compilacion: 30-60 minutos
+- Compilaciones posteriores: 10-30 minutos
+- El ZIP es reutilizable en multiples maquinas
+- Los datos se guardan en aces.db (persistente)
+
+El archivo sigue estas instrucciones sin cambios entre ejecuciones.
+
+================================================================================

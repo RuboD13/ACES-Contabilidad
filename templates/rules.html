@@ -1,0 +1,548 @@
+{% extends 'base.html' %}
+{% block title %}Reglas — ACES Contabilidad{% endblock %}
+{% block topbar_title %}
+  <span class="page-title"><i class="bi bi-tags-fill me-2"></i>Reglas y Etiquetas</span>
+  <span class="info-tooltip ms-2" data-tip="Las reglas categorizan automáticamente transacciones por palabras clave. Las etiquetas son marcas manuales que puedes aplicar a transacciones individuales para organización adicional.">
+    <i class="bi bi-info-circle text-muted" style="font-size:14px"></i>
+  </span>
+{% endblock %}
+{% block topbar_actions %}
+  <button class="btn-ghost-custom sm" onclick="showTagSection()">
+    <i class="bi bi-bookmark-plus me-1"></i>Gestionar etiquetas
+  </button>
+  <button class="btn-primary-custom sm" onclick="showNewRuleForm()">
+    <i class="bi bi-plus-lg me-1"></i>Nueva regla
+  </button>
+{% endblock %}
+
+{% block content %}
+
+<!-- Reapply banner -->
+<div class="card-glass mb-4" id="reapplyBanner">
+  <div class="card-glass-body d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+      <div class="fw-600 text-primary-text">¿Modificaste reglas?</div>
+      <div class="text-muted small">Reaplicar las reglas recategorizará todas las transacciones del período (sin sobrescribir correcciones manuales).</div>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <select class="filter-input" id="reapplyPeriodSelect">
+        {% for p in periods %}
+        <option value="{{ p.id }}">{{ p.name }} ({{ p.tipo }})</option>
+        {% endfor %}
+      </select>
+      <button class="btn-primary-custom sm" onclick="reapplyRules()">
+        <i class="bi bi-arrow-clockwise me-1"></i>Reaplicar período
+      </button>
+      <button class="btn-ghost-custom sm" onclick="reapplyAll(this)" title="Aplica las reglas a todas las transacciones de todos los períodos (sin sobrescribir correcciones manuales)">
+        <i class="bi bi-lightning-charge me-1"></i>Aplicar a todos
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- New rule form -->
+<div class="card-glass mb-4 d-none" id="newRuleForm">
+  <div class="card-glass-header">
+    <i class="bi bi-plus-circle-fill me-2 text-accent-green"></i>Nueva Regla
+  </div>
+  <div class="card-glass-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label-custom">Tipo</label>
+        <div class="segmented-control" id="newRuleTipo">
+          <button class="seg-btn active" data-value="income">Ingreso</button>
+          <button class="seg-btn" data-value="expense">Gasto</button>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label-custom">Clave (sin espacios)</label>
+        <input type="text" class="form-control-custom" id="newKey" placeholder="ej: fee_plataforma">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label-custom">Etiqueta</label>
+        <input type="text" class="form-control-custom" id="newLabel" placeholder="ej: Fee Plataforma">
+      </div>
+      <div class="col-md-8">
+        <label class="form-label-custom">Palabras clave <small class="text-muted">(separadas por coma)</small></label>
+        <input type="text" class="form-control-custom" id="newKeywords" placeholder="fee plataforma, comision plataforma">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label-custom">Prioridad <small class="text-muted">(menor = primero)</small></label>
+        <input type="number" class="form-control-custom" id="newPriority" value="100" min="1" max="999">
+      </div>
+    </div>
+    <div class="mt-3 d-flex gap-2">
+      <button class="btn-primary-custom sm" onclick="saveNewRule()">
+        <i class="bi bi-check-lg me-1"></i>Guardar regla
+      </button>
+      <button class="btn-ghost-custom sm" onclick="hideNewRuleForm()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rules split view -->
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card-glass">
+      <div class="card-glass-header">
+        <i class="bi bi-arrow-down-circle-fill me-2 text-accent-green"></i>
+        Reglas de Ingresos
+        <span class="badge-count" id="countIncome">0</span>
+      </div>
+      <div class="card-glass-body p-0" id="incomeRules"></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card-glass">
+      <div class="card-glass-header">
+        <i class="bi bi-arrow-up-circle-fill me-2 text-accent-red"></i>
+        Reglas de Gastos
+        <span class="badge-count" id="countExpense">0</span>
+      </div>
+      <div class="card-glass-body p-0" id="expenseRules"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Tags Section ───────────────────────────────────────────────────────── -->
+<div class="card-glass mt-4 d-none" id="tagsSection">
+  <div class="card-glass-header d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-bookmark-fill me-1 text-accent-violet"></i>
+      Etiquetas
+      <span class="info-tooltip" data-tip="Las etiquetas son marcas personalizadas que puedes aplicar a transacciones individuales. A diferencia de las categorías, una transacción puede tener múltiples etiquetas. Se asignan manualmente desde la página de Transacciones.">
+        <i class="bi bi-info-circle text-muted" style="font-size:11px"></i>
+      </span>
+      <span class="badge-count" id="tagsCount">0</span>
+    </div>
+    <button class="btn-primary-custom sm" onclick="showNewTagForm()">
+      <i class="bi bi-plus-lg me-1"></i>Nueva etiqueta
+    </button>
+  </div>
+  <div class="card-glass-body">
+    <!-- New tag form (hidden) -->
+    <div class="d-none mb-3 p-3" id="newTagForm" style="background:var(--bg-input);border-radius:var(--radius-sm)">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label-custom">Nombre</label>
+          <input class="form-control-custom" id="newTagName" placeholder="Ej: Revisado, Facturado, IRPF...">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label-custom">Color</label>
+          <div class="color-picker-grid" id="newTagColorPicker">
+            {% for c in ['#f9b233','#10b981','#f59e0b','#f43f5e','#06b6d4','#fb923c','#ec4899','#84cc16'] %}
+            <div class="color-swatch {% if loop.first %}selected{% endif %}"
+                 data-color="{{ c }}" style="background:{{ c }}"
+                 onclick="selectNewTagColor('{{ c }}')"></div>
+            {% endfor %}
+          </div>
+          <input type="hidden" id="newTagColor" value="#f9b233">
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+          <button class="btn-primary-custom sm" onclick="saveNewTag()"><i class="bi bi-check-lg me-1"></i>Crear</button>
+          <button class="btn-ghost-custom sm" onclick="hideNewTagForm()">Cancelar</button>
+        </div>
+      </div>
+    </div>
+    <!-- Tags list -->
+    <div id="tagsList" class="d-flex flex-wrap gap-2">
+      <div class="text-muted small py-2">Cargando etiquetas...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Guide section ─────────────────────────────────────────────────────── -->
+<div class="card-glass mt-4">
+  <div class="card-glass-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-book me-2 text-accent-blue"></i>Guía de Reglas y Etiquetas</span>
+    <button class="btn-xs-ghost" onclick="this.closest('.card-glass').querySelector('.guide-body').classList.toggle('d-none')">
+      <i class="bi bi-chevron-down me-1"></i>Mostrar / Ocultar
+    </button>
+  </div>
+  <div class="card-glass-body guide-body d-none">
+
+    <div class="row g-4">
+      <!-- How rules work -->
+      <div class="col-lg-6">
+        <h6 class="guide-section-title"><i class="bi bi-gear me-2"></i>Cómo funcionan las reglas</h6>
+        <p class="guide-text">Las reglas categorizan transacciones <strong>automáticamente</strong> al importar un extracto. El motor compara el texto del concepto con las palabras clave de cada regla, en orden de prioridad (número menor = mayor prioridad).</p>
+        <ul class="guide-list">
+          <li><strong>Prioridad:</strong> Si dos reglas coinciden, gana la de menor número. Usa prioridades 10–50 para reglas específicas y 90–99 para comodines.</li>
+          <li><strong>Signo automático:</strong> Una regla de tipo <em>Ingreso</em> solo se aplica a importes positivos; una de <em>Gasto</em> solo a negativos.</li>
+          <li><strong>Override manual:</strong> Si corriges una categoría a mano, queda marcada con <i class="bi bi-pencil-fill"></i> y <em>no</em> se sobreescribe al reaplicar reglas.</li>
+          <li><strong>Reaplicar:</strong> Tras crear o modificar una regla, pulsa <em>Reaplicar</em> para recategorizar el período sin perder correcciones manuales.</li>
+        </ul>
+      </div>
+
+      <!-- Example rules -->
+      <div class="col-lg-6">
+        <h6 class="guide-section-title"><i class="bi bi-lightning me-2"></i>Ejemplos de reglas útiles</h6>
+        <div class="guide-example-list">
+
+          <div class="guide-example">
+            <div class="guide-ex-head">
+              <span class="badge-tipo badge-income">Ingreso</span>
+              <span class="guide-ex-label">Honorarios Gestión Integral</span>
+              <span class="priority-badge ms-auto">P10</span>
+            </div>
+            <div class="guide-ex-kws">
+              <span class="kw-badge">honorarios gestion</span>
+              <span class="kw-badge">gestión integral</span>
+              <span class="kw-badge">cuota gestion</span>
+            </div>
+            <div class="guide-ex-tip">Captura los cobros mensuales por gestión de alquileres. Prioridad alta para que no lo capture "otros ingresos".</div>
+          </div>
+
+          <div class="guide-example">
+            <div class="guide-ex-head">
+              <span class="badge-tipo badge-income">Ingreso</span>
+              <span class="guide-ex-label">Renta de Inquilinos (tránsito)</span>
+              <span class="priority-badge ms-auto">P15</span>
+            </div>
+            <div class="guide-ex-kws">
+              <span class="kw-badge">renta alquiler</span>
+              <span class="kw-badge">cobro alquiler</span>
+              <span class="kw-badge">transferencia alquiler</span>
+            </div>
+            <div class="guide-ex-tip">Rentas que cobras del inquilino y pagas al propietario. El neto real es tu comisión; esta categoría ayuda a separar el flujo de tránsito.</div>
+          </div>
+
+          <div class="guide-example">
+            <div class="guide-ex-head">
+              <span class="badge-tipo badge-expense">Gasto</span>
+              <span class="guide-ex-label">Comisiones Bancarias</span>
+              <span class="priority-badge ms-auto">P60</span>
+            </div>
+            <div class="guide-ex-kws">
+              <span class="kw-badge">comisión bancaria</span>
+              <span class="kw-badge">cuota banco</span>
+              <span class="kw-badge">mantenimiento cuenta</span>
+            </div>
+            <div class="guide-ex-tip">Cargos del banco: mantenimiento, TPV, transferencias emitidas. Prioridad media porque el texto varía según entidad.</div>
+          </div>
+
+          <div class="guide-example">
+            <div class="guide-ex-head">
+              <span class="badge-tipo badge-expense">Gasto</span>
+              <span class="guide-ex-label">Marketing y Publicidad</span>
+              <span class="priority-badge ms-auto">P20</span>
+            </div>
+            <div class="guide-ex-kws">
+              <span class="kw-badge">idealista</span>
+              <span class="kw-badge">fotocasa</span>
+              <span class="kw-badge">google ads</span>
+              <span class="kw-badge">habitaclia</span>
+            </div>
+            <div class="guide-ex-tip">Portales inmobiliarios y publicidad digital. Añade el nombre exacto que aparece en el extracto bancario.</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Tags guide -->
+      <div class="col-12">
+        <hr style="border-color:var(--border);margin:4px 0 16px">
+        <h6 class="guide-section-title"><i class="bi bi-bookmark me-2"></i>Cuándo usar Etiquetas en lugar de Categorías</h6>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="guide-tip-card">
+              <div class="guide-tip-icon"><i class="bi bi-check2-circle text-accent-green"></i></div>
+              <div>
+                <div class="fw-600 mb-1">Marcado fiscal</div>
+                <div class="guide-text">Etiqueta como <em>IVA deducible</em> o <em>IRPF 15%</em> las facturas con retención. Filtra por etiqueta al preparar el modelo 303.</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="guide-tip-card">
+              <div class="guide-tip-icon"><i class="bi bi-building text-accent-blue"></i></div>
+              <div>
+                <div class="fw-600 mb-1">Por inmueble</div>
+                <div class="guide-text">Crea etiquetas por propiedad (<em>Calle Mayor 5</em>, <em>Piso 3B</em>) y asígnalas a reparaciones o rentas concretas para trazabilidad.</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="guide-tip-card">
+              <div class="guide-tip-icon"><i class="bi bi-person text-accent-violet"></i></div>
+              <div>
+                <div class="fw-600 mb-1">Por propietario</div>
+                <div class="guide-text">Etiqueta movimientos por propietario para liquidaciones individuales. Combina con el filtro de etiqueta en Transacciones para ver el resumen de cada uno.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog modal-dark">
+    <div class="modal-content modal-content-dark">
+      <div class="modal-header-dark">
+        <h5 class="modal-title-dark">Editar Regla</h5>
+        <button type="button" class="btn-close-dark" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-body-dark">
+        <input type="hidden" id="editRuleId">
+        <div class="mb-3">
+          <label class="form-label-custom">Etiqueta</label>
+          <input type="text" class="form-control-custom" id="editLabel">
+        </div>
+        <div class="mb-3">
+          <label class="form-label-custom">Palabras clave <small class="text-muted">(separadas por coma)</small></label>
+          <input type="text" class="form-control-custom" id="editKeywords">
+        </div>
+        <div class="mb-3">
+          <label class="form-label-custom">Prioridad</label>
+          <input type="number" class="form-control-custom" id="editPriority" min="1" max="999">
+        </div>
+      </div>
+      <div class="modal-footer-dark">
+        <button class="btn-ghost-custom sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-primary-custom sm" onclick="saveEditRule()">
+          <i class="bi bi-check-lg me-1"></i>Guardar cambios
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const PERIODS_DATA = [
+    {% for p in periods %}
+    { id: {{ p.id }}, name: "{{ p.name }}", tipo: "{{ p.tipo }}" },
+    {% endfor %}
+  ];
+</script>
+<script src="{{ url_for('static', filename='js/transactions.js') }}"></script>
+<script>
+// Rules page specific JS
+let allRules = [];
+
+async function loadRules() {
+  const res = await fetch('/api/rules');
+  allRules = await res.json();
+  renderRules();
+}
+
+function renderRules() {
+  const income  = allRules.filter(r => r.category_type === 'income'  && r.is_active);
+  const expense = allRules.filter(r => r.category_type === 'expense' && r.is_active);
+
+  document.getElementById('countIncome').textContent  = income.length;
+  document.getElementById('countExpense').textContent = expense.length;
+
+  document.getElementById('incomeRules').innerHTML  = renderRulesList(income);
+  document.getElementById('expenseRules').innerHTML = renderRulesList(expense);
+}
+
+function renderRulesList(rules) {
+  if (!rules.length) return '<div class="empty-rules">Sin reglas activas</div>';
+  return rules.map(r => {
+    const kws = JSON.parse(r.keywords || '[]');
+    return `
+    <div class="rule-card" data-id="${r.id}">
+      <div class="rule-header">
+        <span class="rule-label">${r.category_label}</span>
+        <div class="rule-actions">
+          <button class="icon-btn" onclick='openEditModal(${JSON.stringify(r)})' title="Editar"><i class="bi bi-pencil"></i></button>
+          <button class="icon-btn danger" onclick="deleteRule(${r.id})" title="Desactivar"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>
+      <div class="rule-meta">
+        <span class="priority-badge">P${r.priority}</span>
+        ${kws.map(k => `<span class="kw-badge">${k}</span>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showNewRuleForm()  { document.getElementById('newRuleForm').classList.remove('d-none'); }
+function hideNewRuleForm()  { document.getElementById('newRuleForm').classList.add('d-none'); }
+
+let newRuleTipo = 'income';
+document.querySelectorAll('#newRuleTipo .seg-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#newRuleTipo .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    newRuleTipo = btn.dataset.value;
+  });
+});
+
+async function saveNewRule() {
+  const key   = document.getElementById('newKey').value.trim().replace(/\s+/g,'_');
+  const label = document.getElementById('newLabel').value.trim();
+  const kws   = document.getElementById('newKeywords').value.trim();
+  const prio  = parseInt(document.getElementById('newPriority').value) || 100;
+  if (!key || !label || !kws) { alert('Rellena todos los campos.'); return; }
+
+  const res = await fetch('/api/rules', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ category_key: key, category_label: label,
+                           category_type: newRuleTipo, keywords: kws, priority: prio })
+  });
+  if (res.ok) { hideNewRuleForm(); loadRules(); }
+  else { const e = await res.json(); alert(e.error); }
+}
+
+let _editRuleModal = null;
+function openEditModal(rule) {
+  document.getElementById('editRuleId').value = rule.id;
+  document.getElementById('editLabel').value  = rule.category_label;
+  const kws = JSON.parse(rule.keywords || '[]');
+  document.getElementById('editKeywords').value  = kws.join(', ');
+  document.getElementById('editPriority').value  = rule.priority;
+  if (typeof bootstrap !== 'undefined') {
+    if (!_editRuleModal) _editRuleModal = new bootstrap.Modal(document.getElementById('editModal'));
+    _editRuleModal.show();
+  }
+}
+
+async function saveEditRule() {
+  const id  = document.getElementById('editRuleId').value;
+  const res = await fetch(`/api/rules/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      category_label: document.getElementById('editLabel').value.trim(),
+      keywords:       document.getElementById('editKeywords').value.trim(),
+      priority:       parseInt(document.getElementById('editPriority').value),
+    })
+  });
+  if (res.ok) { _editRuleModal?.hide(); loadRules(); }
+}
+
+async function deleteRule(id) {
+  if (!confirm('¿Desactivar esta regla?')) return;
+  await fetch(`/api/rules/${id}`, { method: 'DELETE' });
+  loadRules();
+}
+
+async function reapplyRules() {
+  const pid = document.getElementById('reapplyPeriodSelect').value;
+  const btn = event.target.closest('button');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Procesando...';
+  const res = await fetch(`/api/rules/reapply`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ period_id: parseInt(pid) })
+  });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Reaplicar período';
+  if (data.ok) alert(`✓ ${data.recategorized} transacciones recategorizadas.`);
+}
+
+async function reapplyAll(btn) {
+  if (!confirm('¿Aplicar todas las reglas activas a TODOS los períodos?\n(Las correcciones manuales no se sobreescriben)')) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Procesando...';
+  const res = await fetch('/api/rules/reapply_all', { method: 'POST' });
+  const data = await res.json();
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Aplicar a todos';
+  if (data.ok) alert(`✓ ${data.recategorized} transacciones recategorizadas en ${data.periods} período(s).`);
+}
+
+loadRules();
+
+// ── Tags management ────────────────────────────────────────────────────────────
+let allTagsData = [];
+
+function showTagSection() {
+  document.getElementById('tagsSection').classList.remove('d-none');
+  document.getElementById('tagsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  loadTagsData();
+}
+
+async function loadTagsData() {
+  const res = await fetch('/api/tags');
+  allTagsData = await res.json();
+  document.getElementById('tagsCount').textContent = allTagsData.length;
+  renderTags();
+}
+
+function renderTags() {
+  const container = document.getElementById('tagsList');
+  if (!allTagsData.length) {
+    container.innerHTML = '<div class="text-muted small py-2">Sin etiquetas. Crea la primera.</div>';
+    return;
+  }
+  container.innerHTML = allTagsData.map(t => `
+    <div class="tag-manage-item" id="tag-item-${t.id}">
+      <span class="tag-color-pill" style="background:${t.color}22;color:${t.color};border-color:${t.color}44">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${t.color};margin-right:5px"></span>
+        ${escRules(t.name)}
+      </span>
+      <button class="icon-btn" style="padding:2px 5px" onclick="openEditTag(${t.id},'${escRules(t.name)}','${t.color}')" title="Editar">
+        <i class="bi bi-pencil" style="font-size:11px"></i>
+      </button>
+      <button class="icon-btn danger" style="padding:2px 5px" onclick="deleteTagData(${t.id})" title="Eliminar">
+        <i class="bi bi-x-lg" style="font-size:11px"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+function showNewTagForm()  { document.getElementById('newTagForm').classList.remove('d-none'); }
+function hideNewTagForm()  { document.getElementById('newTagForm').classList.add('d-none'); }
+
+function selectNewTagColor(c) {
+  document.getElementById('newTagColor').value = c;
+  document.querySelectorAll('#newTagColorPicker .color-swatch').forEach(s =>
+    s.classList.toggle('selected', s.dataset.color === c)
+  );
+}
+
+async function saveNewTag() {
+  const name  = document.getElementById('newTagName').value.trim();
+  const color = document.getElementById('newTagColor').value;
+  if (!name) { document.getElementById('newTagName').focus(); return; }
+  const res = await fetch('/api/tags', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name, color })
+  });
+  if (res.ok) { hideNewTagForm(); document.getElementById('newTagName').value = ''; loadTagsData(); }
+  else { const e = await res.json(); alert(e.error); }
+}
+
+function openEditTag(id, name, color) {
+  const newName = prompt('Nombre de la etiqueta:', name);
+  if (newName === null) return;
+  fetch(`/api/tags/${id}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name: newName.trim(), color })
+  }).then(() => loadTagsData());
+}
+
+async function deleteTagData(id) {
+  if (!confirm('¿Eliminar esta etiqueta? Se eliminará de todas las transacciones etiquetadas.')) return;
+  await fetch(`/api/tags/${id}`, { method: 'DELETE' });
+  loadTagsData();
+}
+
+function escRules(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Init tooltips
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof bootstrap === 'undefined') return;
+  document.querySelectorAll('.info-tooltip[data-tip]').forEach(el => {
+    el.setAttribute('title', el.dataset.tip);
+    new bootstrap.Tooltip(el, { placement:'top', trigger:'hover' });
+  });
+});
+</script>
+{% endblock %}

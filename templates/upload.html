@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% block title %}Subir CSV — ACES Contabilidad{% endblock %}
+{% block topbar_title %}<span class="page-title"><i class="bi bi-cloud-upload-fill me-2"></i>Subir Extracto</span>{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-xl-8 col-lg-10">
+
+    <div class="card-glass mb-4">
+      <div class="card-glass-header">
+        <i class="bi bi-file-earmark-spreadsheet-fill me-2 text-accent-green"></i>
+        Importar CSV bancario
+      </div>
+      <div class="card-glass-body">
+
+        <form id="uploadForm" action="{{ url_for('upload.upload_file') }}" method="POST"
+              enctype="multipart/form-data">
+
+          <!-- Hidden fields filled by JS -->
+          <input type="hidden" name="periods_config" id="periodsConfigInput">
+          <input type="hidden" name="tipo" id="tipoHidden" value="banco">
+          <input type="hidden" name="account_id" id="accountIdHidden" value="{{ current_account_id }}">
+
+          <!-- Account selector -->
+          {% if all_accounts|length > 1 %}
+          <div class="mb-4">
+            <label class="form-label-custom">Libro de contabilidad</label>
+            <div class="account-select-row">
+              {% for acc in all_accounts %}
+              <label class="account-radio-card {% if acc.id == current_account_id %}active{% endif %}"
+                     id="accLabel-{{ acc.id }}">
+                <input type="radio" name="_account_ui" value="{{ acc.id }}"
+                       {% if acc.id == current_account_id %}checked{% endif %}
+                       onchange="selectAccount({{ acc.id }}, '{{ acc.color }}')">
+                <div class="account-color-dot" style="background:{{ acc.color }}"></div>
+                <span>{{ acc.name }}</span>
+              </label>
+              {% endfor %}
+              <a href="{{ url_for('accounts.accounts') }}" class="account-radio-card account-radio-new" title="Gestionar cuentas">
+                <i class="bi bi-plus-lg"></i>
+              </a>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- Drop zone -->
+          <div class="drop-zone" id="dropZone" onclick="document.getElementById('csv_file').click()">
+            <div class="drop-zone-icon"><i class="bi bi-file-earmark-arrow-up" id="dropIcon"></i></div>
+            <div class="drop-zone-text" id="dropText">Arrastra tu archivo aquí o <span class="text-accent-green">haz clic para seleccionar</span></div>
+            <div class="drop-zone-sub" id="dropSub">CSV, XLS, XLSX — CaixaBank, BBVA, Santander, Sabadell y cualquier formato con fecha e importe</div>
+          </div>
+          <input type="file" name="csv_file" id="csv_file" accept=".csv,.txt,.xls,.xlsx" class="d-none">
+
+          <!-- Parsing spinner -->
+          <div id="parsingSpinner" class="text-center py-4 d-none">
+            <div class="spinner-border text-accent" role="status" style="color:var(--blue)"></div>
+            <p class="text-muted mt-2 small">Analizando archivo...</p>
+          </div>
+
+          <!-- Error banner -->
+          <div id="parseError" class="d-none mt-3">
+            <div class="alert alert-danger mb-0">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              <span id="parseErrorMsg"></span>
+            </div>
+          </div>
+
+          <!-- Preview section (shown after successful parse) -->
+          <div id="previewSection" class="d-none">
+
+            <!-- Tipo toggle -->
+            <div class="d-flex align-items-center gap-3 mt-4 mb-3">
+              <span class="form-label-custom mb-0">Tipo de cuenta:</span>
+              <div class="tipo-toggle" id="tipoToggle">
+                <label class="tipo-option">
+                  <input type="radio" name="_tipo_ui" value="banco" checked>
+                  <span><i class="bi bi-bank me-1"></i>Banco</span>
+                </label>
+                <label class="tipo-option">
+                  <input type="radio" name="_tipo_ui" value="caja">
+                  <span><i class="bi bi-cash-coin me-1"></i>Caja</span>
+                </label>
+              </div>
+              <div class="ms-auto">
+                <span id="previewSummary" class="text-muted small"></span>
+              </div>
+            </div>
+
+            <!-- Detected periods cards -->
+            <div class="section-label mb-2">
+              <i class="bi bi-calendar3 me-1"></i>
+              Períodos detectados
+              <span class="text-muted fw-400 ms-1 small">(puedes editar los nombres)</span>
+            </div>
+            <div id="periodCards" class="period-cards-grid mb-4"></div>
+
+            <!-- Preview table -->
+            <div class="section-label mb-2"><i class="bi bi-eye me-1"></i>Vista previa de transacciones</div>
+            <div class="table-responsive mb-1">
+              <table class="table table-preview table-sm mb-0">
+                <thead>
+                  <tr><th>Fecha</th><th>Concepto</th><th class="text-end">Importe</th><th class="text-end">Saldo</th></tr>
+                </thead>
+                <tbody id="previewBody"></tbody>
+              </table>
+            </div>
+            <div id="previewMore" class="text-muted small text-center pb-2"></div>
+
+            <!-- Warnings -->
+            <div id="previewWarnings" class="mt-2"></div>
+
+            <!-- Submit -->
+            <div class="mt-4 d-flex gap-3 align-items-center">
+              <button type="submit" class="btn-primary-custom" id="submitBtn">
+                <span class="btn-text" id="submitText"><i class="bi bi-upload me-2"></i>Importar</span>
+                <span class="btn-loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Procesando...</span>
+              </button>
+              <button type="button" class="btn-ghost-custom" onclick="resetUpload()">
+                <i class="bi bi-x-circle me-1"></i>Cancelar
+              </button>
+            </div>
+          </div><!-- /previewSection -->
+
+        </form>
+      </div>
+    </div>
+
+    <!-- Imported periods history -->
+    {% if periods %}
+    <div class="card-glass">
+      <div class="card-glass-header">
+        <i class="bi bi-clock-history me-2 text-accent-blue"></i>
+        Períodos importados
+      </div>
+      <div class="card-glass-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark-custom mb-0">
+            <thead>
+              <tr><th>Período</th><th>Tipo</th><th>Desde</th><th>Hasta</th><th>Archivo</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for p in periods %}
+              <tr id="period-row-{{ p.id }}">
+                <td class="fw-500">{{ p.name }}</td>
+                <td><span class="badge-tipo badge-{{ p.tipo }}">{{ p.tipo }}</span></td>
+                <td class="text-muted">{{ p.date_from }}</td>
+                <td class="text-muted">{{ p.date_to }}</td>
+                <td class="text-muted small">{{ p.csv_filename or '—' }}</td>
+                <td>
+                  <div class="d-flex gap-1">
+                    <a href="{{ url_for('dashboard.dashboard') }}?period={{ p.id }}&account={{ current_account_id }}"
+                       class="btn-xs-ghost"><i class="bi bi-arrow-right"></i></a>
+                    <button class="btn-xs-ghost danger" title="Eliminar período"
+                            onclick="deletePeriodUpload({{ p.id }}, '{{ p.name|e }}')">
+                      <i class="bi bi-trash3"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/upload.js') }}"></script>
+<script>
+function selectAccount(id, color) {
+  document.getElementById('accountIdHidden').value = id;
+  document.querySelectorAll('.account-radio-card').forEach(el => {
+    el.classList.toggle('active', el.id === 'accLabel-' + id);
+  });
+}
+
+async function deletePeriodUpload(periodId, name) {
+  if (!confirm(`¿Eliminar el período "${name}" y todas sus transacciones? Esta acción no se puede deshacer.`)) return;
+  const res = await fetch(`/api/periods/${periodId}`, { method: 'DELETE' });
+  if (res.ok) {
+    const row = document.getElementById(`period-row-${periodId}`);
+    if (row) row.remove();
+  } else {
+    const err = await res.json();
+    alert(err.error || 'Error al eliminar');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof bootstrap === 'undefined') return;
+  document.querySelectorAll('.info-tooltip[data-tip]').forEach(el => {
+    el.setAttribute('title', el.dataset.tip);
+    new bootstrap.Tooltip(el, { placement:'top', trigger:'hover' });
+  });
+});
+</script>
+{% endblock %}

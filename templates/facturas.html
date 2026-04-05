@@ -1,0 +1,700 @@
+{% extends 'base.html' %}
+{% block title %}Facturas — ACES Contabilidad{% endblock %}
+{% block topbar_title %}
+  <span class="page-title"><i class="bi bi-receipt me-2"></i>Facturas y Documentos</span>
+  <span class="info-tooltip ms-2" data-tip="Panel izquierdo: lista de transacciones por período. Punto verde = tiene factura adjunta. Punto gris = falta factura. Selecciona una transacción para ver y gestionar sus facturas en el panel derecho.">
+    <i class="bi bi-info-circle text-muted" style="font-size:14px"></i>
+  </span>
+{% endblock %}
+{% block topbar_actions %}
+  <button class="btn-primary-custom sm" onclick="openUploadModal()">
+    <i class="bi bi-plus-lg me-1"></i>Subir factura
+  </button>
+{% endblock %}
+
+{% block content %}
+
+<!-- 2-panel layout -->
+<div class="fct-layout">
+
+  <!-- ── LEFT PANEL: transactions by period ─────────────────────────────────── -->
+  <div class="fct-left" id="fctLeft">
+
+    <!-- Search + filter bar -->
+    <div class="fct-filter">
+      <div class="search-input-wrap flex-grow-1">
+        <i class="bi bi-search search-icon"></i>
+        <input type="text" class="filter-input ps-4 w-100" id="fctSearch"
+               placeholder="Buscar concepto, categoría, fecha...">
+      </div>
+      <div class="segmented-control sm" id="quarterFilter">
+        <button class="seg-btn active" data-value="">Todo</button>
+        <button class="seg-btn" data-value="Q1">Q1</button>
+        <button class="seg-btn" data-value="Q2">Q2</button>
+        <button class="seg-btn" data-value="Q3">Q3</button>
+        <button class="seg-btn" data-value="Q4">Q4</button>
+      </div>
+      <div class="segmented-control sm" id="statusFilter">
+        <button class="seg-btn active" data-value="">Todo</button>
+        <button class="seg-btn" data-value="sin_factura" title="Sin factura">Sin fact.</button>
+        <button class="seg-btn" data-value="pedir_factura" title="Pedir factura">Pedir</button>
+        <button class="seg-btn" data-value="con_factura" title="Con factura">Con fact.</button>
+      </div>
+      <select class="filter-input" id="yearFilter" style="min-width:80px">
+        <option value="">Año</option>
+      </select>
+    </div>
+
+    <!-- Stats bar -->
+    <div id="fctStats" class="fct-summary"></div>
+
+    <!-- Loading / empty / list -->
+    <div id="fctLoading" class="text-center py-5 text-muted small">
+      <div class="spinner-border spinner-border-sm me-2"></div>Cargando períodos…
+    </div>
+    <div id="fctEmpty" class="text-center py-5 d-none">
+      <i class="bi bi-inbox" style="font-size:2.5rem;color:var(--text-muted)"></i>
+      <p class="text-muted mt-2">Sin períodos importados.</p>
+    </div>
+    <div id="fctList" style="display:none; flex:1; overflow-y:auto"></div>
+
+  </div><!-- end fct-left -->
+
+  <!-- ── RIGHT PANEL: tx detail + viewer ───────────────────────────────────── -->
+  <div class="fct-right" id="fctRight">
+
+    <!-- Empty state -->
+    <div class="fct-viewer-empty" id="fctViewerEmpty">
+      <i class="bi bi-receipt" style="font-size:3rem;color:var(--text-muted)"></i>
+      <p class="text-muted mt-3" style="max-width:260px;text-align:center">
+        Selecciona una transacción para ver y gestionar sus facturas adjuntas
+      </p>
+    </div>
+
+    <!-- TX detail (shown when a transaction is selected) -->
+    <div id="fctTxDetail" style="display:none;flex-direction:column;height:100%;overflow:hidden">
+
+      <!-- Transaction header -->
+      <div class="fct-viewer-header" id="fctTxHeader"></div>
+
+      <!-- Facturas list (compact, max 220px) -->
+      <div class="fct-tx-facturas-list" id="fctTxFacturas"></div>
+
+      <!-- Document viewer (flex: 1) -->
+      <div class="fct-tx-viewer" id="fctTxViewer">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);gap:8px;padding:24px">
+          <i class="bi bi-file-earmark" style="font-size:2rem"></i>
+          <p class="small">Sin documento seleccionado</p>
+        </div>
+      </div>
+
+    </div><!-- end fctTxDetail -->
+  </div><!-- end fct-right -->
+
+</div><!-- end fct-layout -->
+
+<!-- ─── Upload Factura Modal ───────────────────────────────────────────────── -->
+<div class="modal fade modal-dark" id="uploadFacturaModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:520px">
+    <div class="modal-content modal-content-dark">
+      <div class="modal-header-dark">
+        <span class="modal-title-dark"><i class="bi bi-receipt me-2"></i>Subir factura</span>
+        <button class="btn-close-dark" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-body-dark">
+        <div class="mb-3">
+          <label class="form-label-custom">Archivo (PDF, JPG, PNG)</label>
+          <input type="file" class="form-control-custom" id="uploadFile"
+                 accept=".pdf,.jpg,.jpeg,.png,.webp">
+        </div>
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label-custom">Fecha de factura</label>
+            <input type="date" class="form-control-custom" id="uploadFecha">
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">Número de factura</label>
+            <input type="text" class="form-control-custom" id="uploadNumero" placeholder="F-2025-001">
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">Proveedor / Emisor</label>
+            <input type="text" class="form-control-custom" id="uploadProveedor">
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">Importe (€)</label>
+            <input type="text" class="form-control-custom" id="uploadImporte" placeholder="0,00">
+          </div>
+          <div class="col-12">
+            <label class="form-label-custom">Vincular a transacción (ID)</label>
+            <input type="number" class="form-control-custom" id="uploadTxId"
+                   placeholder="Se rellena automáticamente al subir desde una transacción">
+          </div>
+        </div>
+        <div class="mt-3">
+          <label class="form-label-custom">Notas</label>
+          <textarea class="form-control-custom" id="uploadNotas" rows="2"
+                    placeholder="Observaciones, referencias, etc."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer-dark">
+        <button class="btn-ghost-custom sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-primary-custom sm" onclick="submitFactura()" id="uploadSubmitBtn">
+          <i class="bi bi-upload me-1"></i>Subir
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Edit Factura Modal ─────────────────────────────────────────────────── -->
+<div class="modal fade modal-dark" id="editFacturaModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:480px">
+    <div class="modal-content modal-content-dark">
+      <div class="modal-header-dark">
+        <span class="modal-title-dark">Editar factura</span>
+        <button class="btn-close-dark" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-body-dark">
+        <input type="hidden" id="editFacturaId">
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label-custom">Fecha</label>
+            <input type="date" class="form-control-custom" id="editFecha">
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">Número</label>
+            <input type="text" class="form-control-custom" id="editNumero">
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">Proveedor</label>
+            <input type="text" class="form-control-custom" id="editProveedor">
+          </div>
+          <div class="col-6">
+            <label class="form-label-custom">Importe (€)</label>
+            <input type="text" class="form-control-custom" id="editImporte">
+          </div>
+          <div class="col-12">
+            <label class="form-label-custom">Notas</label>
+            <textarea class="form-control-custom" id="editNotas" rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer-dark">
+        <button class="btn-ghost-custom sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-primary-custom sm" onclick="saveEditFactura()">
+          <i class="bi bi-check2 me-1"></i>Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const ACCOUNT_ID_F = {{ current_account_id }};
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let periodsData  = [];          // from /api/periods/history
+let txsByPeriod  = {};          // periodId -> tx[] (lazy loaded)
+let txFacturas   = {};          // txId     -> factura[] (lazy loaded)
+let selectedTx   = null;        // currently selected tx object (includes .period_id)
+
+let quarterSel = '';
+let yearSel    = '';
+let searchSel  = '';
+let statusSel  = '';
+
+let uploadModal, editModal;
+
+// ── Bootstrap modal helpers ────────────────────────────────────────────────────
+function _getUploadModal() {
+  if (!uploadModal && typeof bootstrap !== 'undefined')
+    uploadModal = new bootstrap.Modal(document.getElementById('uploadFacturaModal'));
+  return uploadModal;
+}
+function _getEditModal() {
+  if (!editModal && typeof bootstrap !== 'undefined')
+    editModal = new bootstrap.Modal(document.getElementById('editFacturaModal'));
+  return editModal;
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  setupFilters();
+  loadPeriods();
+
+  if (typeof bootstrap !== 'undefined') {
+    document.querySelectorAll('.info-tooltip[data-tip]').forEach(el => {
+      el.setAttribute('title', el.dataset.tip);
+      new bootstrap.Tooltip(el, { placement: 'top', trigger: 'hover' });
+    });
+  }
+});
+
+function setupFilters() {
+  document.getElementById('fctSearch').addEventListener('input', e => {
+    searchSel = e.target.value.trim();
+    reRenderAllExpandedPeriods();
+  });
+  document.getElementById('yearFilter').addEventListener('change', e => {
+    yearSel = e.target.value;
+    renderPeriodList();
+  });
+  document.querySelectorAll('#quarterFilter .seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#quarterFilter .seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      quarterSel = btn.dataset.value;
+      renderPeriodList();
+    });
+  });
+  document.querySelectorAll('#statusFilter .seg-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#statusFilter .seg-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      statusSel = btn.dataset.value;
+      reRenderAllExpandedPeriods();
+    });
+  });
+}
+
+// ── Period loading ─────────────────────────────────────────────────────────────
+async function loadPeriods() {
+  document.getElementById('fctLoading').style.display = '';
+  document.getElementById('fctList').style.display = 'none';
+  document.getElementById('fctEmpty').classList.add('d-none');
+
+  const res = await fetch(`/api/periods/history?account=${ACCOUNT_ID_F}`);
+  periodsData = await res.json();
+
+  // Populate year filter
+  const years = [...new Set(periodsData.map(p => (p.date_from||'').slice(0,4)).filter(Boolean))].sort().reverse();
+  const yearEl = document.getElementById('yearFilter');
+  while (yearEl.options.length > 1) yearEl.remove(1);
+  years.forEach(y => { const o = document.createElement('option'); o.value=y; o.textContent=y; yearEl.appendChild(o); });
+
+  renderPeriodList();
+}
+
+function getFilteredPeriods() {
+  return periodsData.filter(p => {
+    if (yearSel && !(p.date_from||'').startsWith(yearSel)) return false;
+    if (quarterSel) {
+      const m = parseInt((p.date_from||'').slice(5,7));
+      if (!m || `Q${Math.ceil(m/3)}` !== quarterSel) return false;
+    }
+    return true;
+  });
+}
+
+function renderPeriodList() {
+  const filtered = getFilteredPeriods();
+  document.getElementById('fctLoading').style.display = 'none';
+
+  if (!filtered.length) {
+    document.getElementById('fctList').style.display = 'none';
+    document.getElementById('fctEmpty').classList.remove('d-none');
+    return;
+  }
+  document.getElementById('fctEmpty').classList.add('d-none');
+
+  const list = document.getElementById('fctList');
+  list.style.display = '';
+
+  // Render period groups (preserve expanded state where possible)
+  list.innerHTML = filtered.map(p => `
+    <div class="fct-period-group" data-period-id="${p.id}">
+      <div class="fct-period-header" onclick="togglePeriod(${p.id})">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-chevron-right fct-chevron" id="chev-${p.id}"></i>
+          <span class="fw-500" style="font-size:13px">${escHtml(p.name)}</span>
+          <span class="badge-tipo-${p.tipo}">${p.tipo}</span>
+        </div>
+        <span class="text-muted" style="font-size:11px">${p.tx_count||0} movs.</span>
+      </div>
+      <div id="ptxs-${p.id}" style="display:none"></div>
+    </div>
+  `).join('');
+
+  // Auto-expand first period
+  if (filtered.length > 0) togglePeriod(filtered[0].id);
+}
+
+async function togglePeriod(pid) {
+  const el   = document.getElementById(`ptxs-${pid}`);
+  const chev = document.getElementById(`chev-${pid}`);
+  if (!el) return;
+
+  if (el.style.display !== 'none') {
+    el.style.display = 'none';
+    chev?.classList.remove('fct-chevron-open');
+    return;
+  }
+
+  el.style.display = '';
+  chev?.classList.add('fct-chevron-open');
+
+  if (!txsByPeriod[pid]) {
+    el.innerHTML = '<div class="text-center py-3 text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Cargando…</div>';
+    const res = await fetch(`/api/transactions/${pid}`);
+    const txs = await res.json();
+    // Sort by fecha ascending and annotate with period_id
+    txs.sort((a,b) => a.fecha.localeCompare(b.fecha));
+    txsByPeriod[pid] = txs.map(t => ({...t, period_id: pid}));
+  }
+  renderTxsForPeriod(pid);
+}
+
+function reRenderAllExpandedPeriods() {
+  document.querySelectorAll('.fct-period-group').forEach(g => {
+    const pid = +g.dataset.periodId;
+    const el  = document.getElementById(`ptxs-${pid}`);
+    if (el && el.style.display !== 'none' && txsByPeriod[pid]) {
+      renderTxsForPeriod(pid);
+    }
+  });
+}
+
+const STATUS = {
+  sin_factura:     {color:'var(--text-muted)', label:'Sin factura'},
+  pedir_factura:   {color:'var(--amber)',      label:'Pedir factura'},
+  factura_emitida: {color:'var(--blue)',       label:'Factura emitida'},
+  con_factura:     {color:'var(--green)',      label:'Con factura'},
+};
+const STATUS_CYCLE = ['sin_factura','pedir_factura','factura_emitida','con_factura'];
+
+function renderTxsForPeriod(pid) {
+  const el  = document.getElementById(`ptxs-${pid}`);
+  if (!el) return;
+  const txs = txsByPeriod[pid] || [];
+
+  const s = searchSel.toLowerCase();
+  const filtered = txs.filter(t => {
+    if (s && !(
+      (t.concepto||'').toLowerCase().includes(s) ||
+      (t.fecha||'').includes(s) ||
+      (t.category_label||'').toLowerCase().includes(s)
+    )) return false;
+    if (statusSel && (t.factura_status || 'sin_factura') !== statusSel) return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    el.innerHTML = '<div class="text-muted small text-center py-2 px-3">Sin resultados</div>';
+    return;
+  }
+
+  el.innerHTML = filtered.map(tx => {
+    const hasFact    = (tx.factura_count||0) > 0;
+    const isSelected = selectedTx?.id === tx.id;
+    const sign       = tx.is_income ? '+' : '−';
+    const amtClass   = tx.is_income ? 'text-accent-green' : 'text-accent-red';
+    const st         = STATUS[tx.factura_status || 'sin_factura'] || STATUS.sin_factura;
+    return `<div class="fct-tx-row ${isSelected?'active':''}"
+                 data-tx-id="${tx.id}" data-period-id="${pid}"
+                 onclick="selectTx(${tx.id}, ${pid})">
+      <div class="fct-row-indicator ${hasFact?'has-doc':'no-doc'}"
+           title="${hasFact ? tx.factura_count+' factura(s)' : 'Sin facturas adjuntas'}"></div>
+      <div class="fct-tx-info">
+        <div class="fct-tx-concepto">${escHtml(tx.concepto||'—')}</div>
+        <div class="fct-tx-meta">
+          <span>${tx.fecha}</span>
+          ${tx.category_label ? `<span class="fct-tx-cat">${escHtml(tx.category_label)}</span>` : ''}
+          ${hasFact ? `<span style="color:var(--green)"><i class="bi bi-paperclip"></i> ${tx.factura_count}</span>` : ''}
+          <span class="fct-tx-status" style="color:${st.color}"
+                onclick="event.stopPropagation(); cycleStatus(${tx.id}, ${pid}, '${tx.factura_status||'sin_factura'}')"
+                title="Click para cambiar estado">${st.label}</span>
+        </div>
+      </div>
+      <div class="fct-tx-amount ${amtClass}">${sign}${fmtEur(Math.abs(tx.importe))}</div>
+    </div>`;
+  }).join('');
+}
+
+async function cycleStatus(txId, pid, current) {
+  const idx  = STATUS_CYCLE.indexOf(current);
+  const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+  const res  = await fetch(`/api/transactions/${txId}/factura_status`, {
+    method: 'PATCH', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({factura_status: next})
+  });
+  if (res.ok) {
+    const tx = txsByPeriod[pid]?.find(t => t.id === txId);
+    if (tx) { tx.factura_status = next; renderTxsForPeriod(pid); }
+  }
+}
+
+// ── Transaction selection ──────────────────────────────────────────────────────
+async function selectTx(txId, pid) {
+  const prevPid = selectedTx?.period_id;
+  selectedTx = txsByPeriod[pid]?.find(t => t.id === txId);
+  if (!selectedTx) return;
+
+  // Re-render both periods to update active state
+  if (prevPid && prevPid !== pid) renderTxsForPeriod(prevPid);
+  renderTxsForPeriod(pid);
+
+  // Show right panel skeleton
+  document.getElementById('fctViewerEmpty').style.display = 'none';
+  document.getElementById('fctTxDetail').style.display = 'flex';
+
+  // Fetch facturas if not cached
+  if (!txFacturas[txId]) {
+    document.getElementById('fctTxFacturas').innerHTML =
+      '<div class="text-center py-3 text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Cargando facturas…</div>';
+    const res = await fetch(`/api/facturas?transaction_id=${txId}`);
+    txFacturas[txId] = await res.json();
+  }
+
+  renderRightPanel();
+}
+
+// ── Right panel rendering ──────────────────────────────────────────────────────
+function renderRightPanel() {
+  if (!selectedTx) return;
+  const tx       = selectedTx;
+  const facturas = txFacturas[tx.id] || [];
+
+  // ── Header ──
+  const sign     = tx.is_income ? '+' : '−';
+  const amtClass = tx.is_income ? 'text-accent-green' : 'text-accent-red';
+  document.getElementById('fctTxHeader').innerHTML = `
+    <div class="fct-vh-info" style="min-width:0">
+      <div class="fw-600" style="font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(tx.concepto||'—')}</div>
+      <div class="text-muted small">
+        ${tx.fecha}
+        ${tx.category_label ? ' · '+escHtml(tx.category_label) : ''}
+        · <span class="${amtClass} fw-600">${sign}${fmtEur(Math.abs(tx.importe))}</span>
+        ${tx.factura_count ? ` · <span style="color:var(--green)"><i class="bi bi-paperclip"></i> ${tx.factura_count} factura(s)</span>` : ''}
+      </div>
+    </div>
+    <div class="fct-vh-actions">
+      <button class="btn-primary-custom sm" onclick="openUploadForTx(${tx.id})">
+        <i class="bi bi-plus me-1"></i>Añadir factura
+      </button>
+    </div>`;
+
+  // ── Factura list ──
+  const listEl = document.getElementById('fctTxFacturas');
+  if (!facturas.length) {
+    listEl.innerHTML = `
+      <div class="text-center py-3 text-muted small" style="border-bottom:1px solid var(--border)">
+        <i class="bi bi-receipt me-1"></i>Sin facturas adjuntas —
+        <button class="btn-ghost-custom sm ms-1" style="display:inline-flex" onclick="openUploadForTx(${tx.id})">
+          <i class="bi bi-plus me-1"></i>Añadir primera
+        </button>
+      </div>`;
+    // Clear viewer
+    document.getElementById('fctTxViewer').innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);gap:8px;padding:24px">
+        <i class="bi bi-file-earmark" style="font-size:2.5rem"></i>
+        <p class="small">Sin documento seleccionado</p>
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = facturas.map(f => {
+    const ext   = (f.original_name||'').split('.').pop()?.toLowerCase();
+    const isPdf = ext === 'pdf';
+    const isImg = ['jpg','jpeg','png','webp'].includes(ext);
+    const icon  = isPdf ? 'bi-file-earmark-pdf text-accent-red'
+                : isImg ? 'bi-file-earmark-image text-accent-blue'
+                : 'bi-file-earmark';
+    return `
+    <div class="fct-row" data-factura-id="${f.id}" onclick="openFacturaDoc(${f.id})">
+      <div class="fct-row-left">
+        <i class="bi ${icon} fct-row-icon"></i>
+        <div class="fct-row-info">
+          <div class="fct-row-name">${escHtml(f.original_name)}</div>
+          <div class="fct-row-meta">
+            ${f.proveedor ? escHtml(f.proveedor)+' · ' : ''}
+            ${f.fecha_factura||''}
+            ${f.importe != null ? ' · '+fmtEur(f.importe) : ''}
+            ${f.numero_factura ? ' · '+escHtml(f.numero_factura) : ''}
+          </div>
+        </div>
+      </div>
+      <div class="fct-row-actions">
+        ${f.trimestre ? `<span class="factura-quarter-badge">${f.trimestre}</span>` : ''}
+        <a href="/api/facturas/${f.id}/file" target="_blank" class="icon-btn" title="Abrir" onclick="event.stopPropagation()">
+          <i class="bi bi-box-arrow-up-right"></i>
+        </a>
+        <button class="icon-btn" onclick="event.stopPropagation(); openEditModal(${f.id})" title="Editar">
+          <i class="bi bi-pencil"></i>
+        </button>
+        <button class="icon-btn danger" onclick="event.stopPropagation(); deleteFactura(${f.id})" title="Eliminar">
+          <i class="bi bi-trash3"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Auto-open first factura in viewer
+  openFacturaDoc(facturas[0].id);
+}
+
+// ── Document viewer ────────────────────────────────────────────────────────────
+function openFacturaDoc(facturaId) {
+  document.querySelectorAll('#fctTxFacturas .fct-row[data-factura-id]').forEach(r =>
+    r.classList.toggle('active', +r.dataset.facturaId === facturaId)
+  );
+
+  const facturas = txFacturas[selectedTx?.id] || [];
+  const f = facturas.find(x => x.id === facturaId);
+  if (!f) return;
+
+  const ext   = (f.original_name||'').split('.').pop()?.toLowerCase();
+  const isPdf = ext === 'pdf';
+  const isImg = ['jpg','jpeg','png','webp'].includes(ext);
+  const url   = `/api/facturas/${f.id}/file`;
+
+  const viewer = document.getElementById('fctTxViewer');
+  if (isPdf) {
+    viewer.innerHTML = `<iframe src="${url}" style="width:100%;height:100%;border:none;flex:1"></iframe>`;
+  } else if (isImg) {
+    viewer.innerHTML = `<div style="overflow:auto;height:100%;display:flex;align-items:flex-start;justify-content:center;padding:16px">
+      <img src="${url}" style="max-width:100%;border-radius:var(--radius-sm);box-shadow:0 4px 24px rgba(0,0,0,.4)">
+    </div>`;
+  } else {
+    viewer.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);gap:12px;padding:24px">
+      <i class="bi bi-file-earmark" style="font-size:3rem"></i>
+      <p>Vista previa no disponible para este tipo de archivo.</p>
+      <a href="${url}" target="_blank" class="btn-primary-custom sm"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir</a>
+    </div>`;
+  }
+}
+
+// ── Upload ─────────────────────────────────────────────────────────────────────
+function openUploadModal() {
+  ['uploadFile','uploadFecha','uploadNumero','uploadProveedor','uploadImporte','uploadTxId','uploadNotas']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  _getUploadModal()?.show();
+}
+
+function openUploadForTx(txId) {
+  openUploadModal();
+  document.getElementById('uploadTxId').value = txId;
+}
+
+async function submitFactura() {
+  const file = document.getElementById('uploadFile').files[0];
+  if (!file) { alert('Selecciona un archivo'); return; }
+
+  const btn = document.getElementById('uploadSubmitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Subiendo...';
+
+  const fd = new FormData();
+  fd.append('file',           file);
+  fd.append('account_id',     ACCOUNT_ID_F);
+  fd.append('fecha_factura',  document.getElementById('uploadFecha').value);
+  fd.append('numero_factura', document.getElementById('uploadNumero').value);
+  fd.append('proveedor',      document.getElementById('uploadProveedor').value);
+  fd.append('importe',        document.getElementById('uploadImporte').value);
+  fd.append('notes',          document.getElementById('uploadNotas').value);
+  const txIdVal = document.getElementById('uploadTxId').value;
+  if (txIdVal) fd.append('transaction_id', txIdVal);
+
+  const res = await fetch('/api/facturas', { method:'POST', body: fd });
+  btn.disabled = false;
+  btn.innerHTML = '<i class="bi bi-upload me-1"></i>Subir';
+
+  if (res.ok) {
+    const newF = await res.json();
+    _getUploadModal()?.hide();
+
+    if (txIdVal) {
+      const tid = parseInt(txIdVal);
+      // Update cache
+      if (txFacturas[tid]) txFacturas[tid].unshift(newF);
+      else txFacturas[tid] = [newF];
+      // Update factura_count in txsByPeriod
+      const pid = selectedTx?.period_id;
+      if (pid && txsByPeriod[pid]) {
+        const tx = txsByPeriod[pid].find(t => t.id === tid);
+        if (tx) { tx.factura_count = (tx.factura_count||0)+1; selectedTx = tx; }
+        renderTxsForPeriod(pid);
+      }
+      // Refresh right panel if this is the currently selected tx
+      if (selectedTx?.id === tid) renderRightPanel();
+    } else {
+      // Generic upload (not tied to a tx) — just reload periods to refresh counts
+      await loadPeriods();
+    }
+  } else {
+    const e = await res.json();
+    alert(e.error || 'Error al subir');
+  }
+}
+
+// ── Edit ───────────────────────────────────────────────────────────────────────
+function openEditModal(facturaId) {
+  const facturas = txFacturas[selectedTx?.id] || [];
+  const f = facturas.find(x => x.id === facturaId);
+  if (!f) return;
+  document.getElementById('editFacturaId').value = f.id;
+  document.getElementById('editFecha').value     = f.fecha_factura  || '';
+  document.getElementById('editNumero').value    = f.numero_factura || '';
+  document.getElementById('editProveedor').value = f.proveedor      || '';
+  document.getElementById('editImporte').value   = f.importe != null ? f.importe : '';
+  document.getElementById('editNotas').value     = f.notes          || '';
+  _getEditModal()?.show();
+}
+
+async function saveEditFactura() {
+  const id = document.getElementById('editFacturaId').value;
+  const payload = {
+    fecha_factura:  document.getElementById('editFecha').value,
+    numero_factura: document.getElementById('editNumero').value,
+    proveedor:      document.getElementById('editProveedor').value,
+    importe:        parseFloat(document.getElementById('editImporte').value.replace(',','.')) || null,
+    notes:          document.getElementById('editNotas').value,
+  };
+  const res = await fetch(`/api/facturas/${id}`, {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  });
+  if (res.ok) {
+    const updated = await res.json();
+    const txId = selectedTx?.id;
+    if (txId && txFacturas[txId]) {
+      const idx = txFacturas[txId].findIndex(f => f.id === parseInt(id));
+      if (idx !== -1) txFacturas[txId][idx] = { ...txFacturas[txId][idx], ...updated };
+    }
+    _getEditModal()?.hide();
+    renderRightPanel();
+  }
+}
+
+// ── Delete ─────────────────────────────────────────────────────────────────────
+async function deleteFactura(facturaId) {
+  if (!confirm('¿Eliminar esta factura? Esta acción no se puede deshacer.')) return;
+
+  const res = await fetch(`/api/facturas/${facturaId}`, { method:'DELETE' });
+  if (!res.ok) { alert('Error al eliminar'); return; }
+
+  const txId = selectedTx?.id;
+  const pid  = selectedTx?.period_id;
+
+  if (txId && txFacturas[txId]) {
+    txFacturas[txId] = txFacturas[txId].filter(f => f.id !== facturaId);
+    // Update count
+    if (pid && txsByPeriod[pid]) {
+      const tx = txsByPeriod[pid].find(t => t.id === txId);
+      if (tx) { tx.factura_count = Math.max(0, (tx.factura_count||1)-1); selectedTx = tx; }
+      renderTxsForPeriod(pid);
+    }
+    renderRightPanel();
+  }
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function fmtEur(v) {
+  return new Intl.NumberFormat('es-ES', {style:'currency', currency:'EUR'}).format(v);
+}
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}
