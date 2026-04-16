@@ -95,6 +95,9 @@ def detect_periods(transactions):
     for month_key in sorted(by_month.keys()):
         txs  = by_month[month_key]
         year, month = month_key.split('-')
+        # Prefer sheet-level saldo inicial if present (from multi-sheet caja files)
+        saldo_ini = next((t['_sheet_saldo_ini'] for t in txs
+                          if t.get('_sheet_saldo_ini') is not None), None)
         periods.append({
             'name':              f"{_MESES[int(month)]} {year}",
             'date_from':         min(t['fecha'] for t in txs),
@@ -102,6 +105,7 @@ def detect_periods(transactions):
             'transaction_count': len(txs),
             'ingresos':          round(sum(t['importe'] for t in txs if t['importe'] > 0), 2),
             'gastos':            round(abs(sum(t['importe'] for t in txs if t['importe'] < 0)), 2),
+            'saldo_inicial':     saldo_ini,
         })
     return periods
 
@@ -441,7 +445,7 @@ def _parse_rows(lines, start_idx, col_map, sep, headers=None):
 # ── Excel parser ──────────────────────────────────────────────────────────────
 
 def _parse_excel(file_storage, ext):
-    """Parse .xls / .xlsx via pandas, reusing the same output format."""
+    """Parse .xls / .xlsx via pandas. Handles both single-sheet and multi-sheet files."""
     try:
         import pandas as pd
     except ImportError:
@@ -451,54 +455,59 @@ def _parse_excel(file_storage, ext):
     engine = 'openpyxl' if ext == '.xlsx' else 'xlrd'
 
     try:
-        # Read all as strings so we control date/number parsing ourselves
-        df = pd.read_excel(io.BytesIO(raw), engine=engine,
-                           header=None, dtype=str, na_filter=False)
+        xl = pd.ExcelFile(io.BytesIO(raw), engine=engine)
+        sheet_names = xl.sheet_names
     except ImportError:
         pkg = 'openpyxl' if ext == '.xlsx' else 'xlrd'
-        raise ValueError(
-            f"Falta el módulo '{pkg}'. Ejecuta: python -m pip install {pkg}"
-        )
+        raise ValueError(f"Falta el módulo '{pkg}'. Ejecuta: python -m pip install {pkg}")
     except Exception as e:
         raise ValueError(f"No se pudo leer el archivo Excel: {e}")
 
-    if df.empty:
+    if not sheet_names:
         raise ValueError("El archivo Excel está vacío.")
 
-    # Convert DataFrame to a list-of-lists (same as CSV lines split by sep)
+    if len(sheet_names) == 1:
+        df = xl.parse(sheet_names[0], header=None, dtype=str, na_filter=False)
+        return _parse_excel_df(df, sheet_name=sheet_names[0])
+    else:
+        # Multi-sheet: parse every sheet as a monthly period
+        return _parse_excel_multisheet(xl, sheet_names)
+
+
+def _parse_excel_df(df, sheet_name=''):
+    """Parse a single pandas DataFrame (one sheet) into the standard result format."""
+    if df.empty:
+        raise ValueError(f"La hoja '{sheet_name}' está vacía.")
+
     matrix = [[str(v).strip() for v in row] for _, row in df.iterrows()]
 
-    # Reuse the same header-detection strategies, adapted for matrix rows
     header_idx, col_map = _find_header_in_matrix(matrix)
     if header_idx is None:
-        # Build a helpful error with the column names we found
         sample_cols = []
         for row in matrix[:10]:
             vals = [c.strip() for c in row if c.strip()]
             if vals:
                 sample_cols = vals
                 break
-        hint = (f" Columnas encontradas: {', '.join(sample_cols[:8])}" if sample_cols else '')
+        hint = (f" Columnas: {', '.join(sample_cols[:8])}" if sample_cols else '')
         raise ValueError(
-            "No se pudo detectar columnas de fecha e importe en el archivo Excel."
-            + hint +
-            " Asegúrate de que el archivo tiene columnas con fechas y cantidades."
+            f"No se detectaron columnas de fecha e importe en la hoja '{sheet_name}'." + hint
         )
 
     tipo_sugerido = _detect_tipo_sugerido(matrix, header_idx, col_map)
-
-    # Extract original column headers for raw_data storage
     headers = [str(c).strip() for c in matrix[header_idx]]
-    transactions, warnings = _parse_matrix_rows(matrix, header_idx + 1, col_map, headers=headers)
+    transactions, warnings, saldo_ini_detected = _parse_matrix_rows(
+        matrix, header_idx + 1, col_map, headers=headers, detect_saldo_inicial=True
+    )
 
     if not transactions:
-        raise ValueError("El archivo Excel no contiene filas con fecha e importe válidos.")
+        raise ValueError(f"La hoja '{sheet_name}' no contiene filas con fecha e importe válidos.")
 
     transactions.sort(key=lambda x: x['fecha'])
 
-    saldo_inicial = None
-    saldo_final   = None
-    if transactions[0].get('saldo') is not None:
+    saldo_inicial = saldo_ini_detected
+    saldo_final = None
+    if saldo_inicial is None and transactions[0].get('saldo') is not None:
         saldo_inicial = round(transactions[0]['saldo'] - transactions[0]['importe'], 2)
     if transactions[-1].get('saldo') is not None:
         saldo_final = transactions[-1]['saldo']
@@ -512,6 +521,46 @@ def _parse_excel(file_storage, ext):
         'warnings':         warnings,
         'detected_columns': col_map,
         'tipo_sugerido':    tipo_sugerido,
+    }
+
+
+def _parse_excel_multisheet(xl, sheet_names):
+    """Parse every sheet in a multi-sheet workbook, returning all transactions combined."""
+    all_txs = []
+    all_warnings = []
+    any_ok = False
+
+    for sheet in sheet_names:
+        try:
+            df = xl.parse(sheet, header=None, dtype=str, na_filter=False)
+            result = _parse_excel_df(df, sheet_name=sheet)
+            # Tag each transaction with the sheet (period) it came from
+            for tx in result['transactions']:
+                tx.setdefault('_sheet', sheet)
+                # Carry sheet-level saldo_inicial into first transaction for later use
+                tx.setdefault('_sheet_saldo_ini', result['saldo_inicial'])
+            all_txs.extend(result['transactions'])
+            any_ok = True
+        except ValueError as e:
+            all_warnings.append(f"Hoja '{sheet}' omitida: {e}")
+
+    if not any_ok or not all_txs:
+        raise ValueError(
+            "No se encontraron transacciones válidas en ninguna hoja del archivo Excel. "
+            + '; '.join(all_warnings)
+        )
+
+    all_txs.sort(key=lambda x: x['fecha'])
+
+    return {
+        'transactions':     all_txs,
+        'saldo_inicial':    None,   # managed per-period in upload route
+        'saldo_final':      None,
+        'date_from':        all_txs[0]['fecha'],
+        'date_to':          all_txs[-1]['fecha'],
+        'warnings':         all_warnings,
+        'detected_columns': {},
+        'tipo_sugerido':    'caja',  # multi-sheet files are typically caja
     }
 
 
@@ -594,12 +643,18 @@ def _strat_data_mat(matrix):
     return None, None
 
 
-def _parse_matrix_rows(matrix, start_idx, col_map, headers=None):
-    """Same as _parse_rows but operates on List[List[str]] instead of split lines."""
-    transactions = []
-    warnings     = []
-    use_ca       = col_map.get('_use_cargo_abono', False)
-    max_idx      = max(v for k, v in col_map.items() if isinstance(v, int))
+def _parse_matrix_rows(matrix, start_idx, col_map, headers=None, detect_saldo_inicial=False):
+    """Same as _parse_rows but operates on List[List[str]] instead of split lines.
+
+    If detect_saldo_inicial=True, rows where concepto normalizes to 'saldo inicial'
+    are skipped as transactions; their amount is returned as the third tuple element.
+    """
+    transactions    = []
+    warnings        = []
+    saldo_ini_found = None
+    use_ca          = col_map.get('_use_cargo_abono', False)
+    max_idx         = max(v for k, v in col_map.items() if isinstance(v, int))
+    concepto_col    = col_map.get('concepto')
 
     for row_num, row in enumerate(matrix[start_idx:], start=start_idx + 2):
         while len(row) <= max_idx:
@@ -614,6 +669,20 @@ def _parse_matrix_rows(matrix, start_idx, col_map, headers=None):
         fecha = _parse_date(raw_fecha)
         if not fecha:
             continue
+
+        # Detect "Saldo inicial" rows — skip as transaction, capture balance
+        if detect_saldo_inicial and concepto_col is not None:
+            concepto_raw = row[concepto_col] if concepto_col < len(row) else ''
+            if _normalize(concepto_raw) in ('saldo inicial', 'saldo inicial caja',
+                                             'saldo inicial banco', 'saldo apertura'):
+                # Try to extract amount from abono/importe/cargo column
+                for col_key in ('abono', 'importe', 'cargo'):
+                    if col_key in col_map:
+                        amt = _parse_amount(row[col_map[col_key]])
+                        if amt is not None and amt > 0:
+                            saldo_ini_found = amt
+                            break
+                continue  # skip this row as a transaction
 
         if use_ca:
             cargo   = _parse_amount(row[col_map['cargo']])  if 'cargo' in col_map else None
@@ -648,6 +717,8 @@ def _parse_matrix_rows(matrix, start_idx, col_map, headers=None):
             'raw_data': raw_data,
         })
 
+    if detect_saldo_inicial:
+        return transactions, warnings, saldo_ini_found
     return transactions, warnings
 
 

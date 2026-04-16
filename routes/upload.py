@@ -85,9 +85,12 @@ def upload_file():
                 continue
 
             if saldo_inicial is None:
-                first = period_txs[0]
-                if first.get('saldo') is not None:
-                    saldo_inicial = round(first['saldo'] - first['importe'], 2)
+                # For multi-sheet caja files: use the saldo captured from "Saldo inicial" row
+                sheet_saldo = period_txs[0].get('_sheet_saldo_ini')
+                if sheet_saldo is not None:
+                    saldo_inicial = sheet_saldo
+                elif period_txs[0].get('saldo') is not None:
+                    saldo_inicial = round(period_txs[0]['saldo'] - period_txs[0]['importe'], 2)
 
             saldo_final = period_txs[-1].get('saldo')
             categorize_batch(period_txs, rules)

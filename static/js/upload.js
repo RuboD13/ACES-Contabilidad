@@ -76,7 +76,8 @@ function renderPreview(data) {
     name:          p.name,
     date_from:     p.date_from,
     date_to:       p.date_to,
-    saldo_inicial: null,
+    saldo_inicial: p.saldo_inicial != null ? p.saldo_inicial : null,
+    selected:      true,   // all selected by default
     _count:        p.transaction_count,
     _ingresos:     p.ingresos,
     _gastos:       p.gastos,
@@ -116,10 +117,24 @@ function renderPreview(data) {
 
 function renderPeriodCards() {
   const container = el('periodCards');
-  container.innerHTML = detectedPeriods.map((p, i) => `
-    <div class="period-card" id="pcard-${i}">
+  // Header with select-all toggle (only if more than 1 period)
+  let headerHtml = '';
+  if (detectedPeriods.length > 1) {
+    headerHtml = `
+    <div class="period-select-header mb-2">
+      <label class="period-select-all-label">
+        <input type="checkbox" id="selectAllPeriods" checked onchange="toggleAllPeriods(this.checked)">
+        <span>Seleccionar todos (${detectedPeriods.length} períodos)</span>
+      </label>
+    </div>`;
+  }
+  container.innerHTML = headerHtml + detectedPeriods.map((p, i) => `
+    <div class="period-card ${p.selected ? '' : 'period-card-deselected'}" id="pcard-${i}">
       <div class="period-card-head">
-        <i class="bi bi-calendar3-range text-accent-blue"></i>
+        ${detectedPeriods.length > 1
+          ? `<input type="checkbox" class="period-cb" ${p.selected ? 'checked' : ''}
+               onchange="togglePeriod(${i}, this.checked)" style="accent-color:var(--blue);cursor:pointer">`
+          : `<i class="bi bi-calendar3-range text-accent-blue"></i>`}
         <div class="period-card-dates">${p.date_from} → ${p.date_to}</div>
         <div class="period-card-count">${p._count} ops</div>
       </div>
@@ -145,6 +160,29 @@ function renderPeriodCards() {
     </div>`).join('');
 }
 
+function togglePeriod(i, checked) {
+  detectedPeriods[i].selected = checked;
+  const card = el(`pcard-${i}`);
+  if (card) card.classList.toggle('period-card-deselected', !checked);
+  // Update select-all checkbox state
+  const allChecked = detectedPeriods.every(p => p.selected);
+  const someChecked = detectedPeriods.some(p => p.selected);
+  const masterCb = el('selectAllPeriods');
+  if (masterCb) { masterCb.checked = allChecked; masterCb.indeterminate = !allChecked && someChecked; }
+  updateSubmitLabel();
+}
+
+function toggleAllPeriods(checked) {
+  detectedPeriods.forEach((p, i) => {
+    p.selected = checked;
+    const card = el(`pcard-${i}`);
+    if (card) card.classList.toggle('period-card-deselected', !checked);
+    const cb = document.querySelector(`#pcard-${i} .period-cb`);
+    if (cb) cb.checked = checked;
+  });
+  updateSubmitLabel();
+}
+
 function updatePeriodName(i, val)  { detectedPeriods[i].name = val; updateSubmitLabel(); }
 function updatePeriodSaldo(i, val) {
   const n = parseFloat(val.replace(',', '.'));
@@ -152,20 +190,26 @@ function updatePeriodSaldo(i, val) {
 }
 
 function updateSubmitLabel() {
-  const n = detectedPeriods.length;
-  el('submitText').innerHTML =
-    `<i class="bi bi-upload me-2"></i>Importar ${n} período${n !== 1 ? 's' : ''}`;
+  const selected = detectedPeriods.filter(p => p.selected);
+  const n = selected.length;
+  el('submitText').innerHTML = n === 0
+    ? `<i class="bi bi-upload me-2"></i>Importar`
+    : `<i class="bi bi-upload me-2"></i>Importar ${n} período${n !== 1 ? 's' : ''}`;
+  el('submitBtn').disabled = n === 0;
 }
 
 // ── Form submit ───────────────────────────────────────────────────────────────
 document.getElementById('uploadForm').addEventListener('submit', e => {
-  // Serialize periods config into hidden input
-  const config = detectedPeriods.map(p => ({
-    name:          p.name,
-    date_from:     p.date_from,
-    date_to:       p.date_to,
-    saldo_inicial: p.saldo_inicial,
-  }));
+  // Only include selected periods
+  const config = detectedPeriods
+    .filter(p => p.selected)
+    .map(p => ({
+      name:          p.name,
+      date_from:     p.date_from,
+      date_to:       p.date_to,
+      saldo_inicial: p.saldo_inicial,
+    }));
+  if (!config.length) { e.preventDefault(); return; }
   el('periodsConfigInput').value = JSON.stringify(config);
 
   submitBtn.querySelector('.btn-text').classList.add('d-none');
