@@ -146,9 +146,48 @@ def api_tags():
             ).fetchall()
         else:
             rows = conn.execute("SELECT * FROM tags ORDER BY name").fetchall()
-        return jsonify([dict(zip(r.keys(), tuple(r))) for r in rows])
+        result = []
+        for r in rows:
+            d = dict(zip(r.keys(), tuple(r)))
+            if isinstance(d.get('keywords'), str):
+                try:
+                    d['keywords'] = json.loads(d['keywords'])
+                except (json.JSONDecodeError, TypeError):
+                    d['keywords'] = []
+            result.append(d)
+        return jsonify(result)
     finally:
         conn.close()
+
+
+@rules_bp.route('/api/tags/<int:tag_id>', methods=['GET'])
+def get_tag(tag_id):
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT * FROM tags WHERE id=?", [tag_id]).fetchone()
+        if not row:
+            return jsonify({'error': 'Etiqueta no encontrada'}), 404
+        d = dict(zip(row.keys(), tuple(row)))
+        if isinstance(d.get('keywords'), str):
+            try:
+                d['keywords'] = json.loads(d['keywords'])
+            except (json.JSONDecodeError, TypeError):
+                d['keywords'] = []
+        return jsonify(d)
+    finally:
+        conn.close()
+
+
+def _parse_keywords(kw):
+    """Normaliza keywords: acepta string CSV o lista. Devuelve lista limpia sin duplicados."""
+    if isinstance(kw, str):
+        kw = [k.strip().lower() for k in kw.split(',') if k.strip()]
+    elif isinstance(kw, list):
+        kw = [k.strip().lower() for k in kw if isinstance(k, str) and k.strip()]
+    else:
+        kw = []
+    seen = set()
+    return [k for k in kw if k not in seen and not seen.add(k)]
 
 
 @rules_bp.route('/api/tags', methods=['POST'])
@@ -160,15 +199,20 @@ def create_tag():
     conn = get_db()
     try:
         acct = data.get('account_id')
+        kw = _parse_keywords(data.get('keywords', []))
+        is_auto = 1 if data.get('is_auto_apply') else 0
         cur = conn.execute(
-            "INSERT INTO tags (name, color, account_id) VALUES (?, ?, ?)",
-            (name, data.get('color', '#6366f1'), acct)
+            "INSERT INTO tags (name, color, account_id, keywords, is_auto_apply) VALUES (?, ?, ?, ?, ?)",
+            (name, data.get('color', '#6366f1'), acct, json.dumps(kw, ensure_ascii=False), is_auto)
         )
         log_action_db(conn, 'tag_create', f'Nueva etiqueta: "{name}"', acct or 1,
-            details={'nombre': name, 'color': data.get('color', '#6366f1')})
+            details={'nombre': name, 'color': data.get('color', '#6366f1'),
+                     'palabras_clave': kw, 'auto_aplicar': bool(is_auto)})
         conn.commit()
         row = conn.execute("SELECT * FROM tags WHERE id=?", [cur.lastrowid]).fetchone()
-        return jsonify(dict(zip(row.keys(), tuple(row)))), 201
+        d = dict(zip(row.keys(), tuple(row)))
+        d['keywords'] = json.loads(d['keywords']) if isinstance(d.get('keywords'), str) else (d.get('keywords') or [])
+        return jsonify(d), 201
     finally:
         conn.close()
 
@@ -178,16 +222,27 @@ def update_tag(tag_id):
     data = request.get_json(force=True) or {}
     conn = get_db()
     try:
-        allowed = {'name', 'color'}
+        allowed = {'name', 'color', 'keywords', 'is_auto_apply'}
         updates = {k: v for k, v in data.items() if k in allowed}
         if not updates:
             return jsonify({'error': 'Sin cambios'}), 400
+        if 'keywords' in updates:
+            updates['keywords'] = json.dumps(
+                _parse_keywords(updates['keywords']), ensure_ascii=False)
+        if 'is_auto_apply' in updates:
+            updates['is_auto_apply'] = 1 if updates['is_auto_apply'] else 0
         set_clause = ', '.join(f"{k}=?" for k in updates)
         conn.execute(f"UPDATE tags SET {set_clause} WHERE id=?",
                      list(updates.values()) + [tag_id])
+        tag_row = conn.execute("SELECT name FROM tags WHERE id=?", [tag_id]).fetchone()
+        log_action_db(conn, 'tag_edit',
+            f'Etiqueta editada: "{tag_row["name"] if tag_row else tag_id}"',
+            details={'tag_id': tag_id, **{k: v for k, v in updates.items()}})
         conn.commit()
         row = conn.execute("SELECT * FROM tags WHERE id=?", [tag_id]).fetchone()
-        return jsonify(dict(zip(row.keys(), tuple(row))))
+        d = dict(zip(row.keys(), tuple(row)))
+        d['keywords'] = json.loads(d['keywords']) if isinstance(d.get('keywords'), str) else (d.get('keywords') or [])
+        return jsonify(d)
     finally:
         conn.close()
 

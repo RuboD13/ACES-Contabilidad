@@ -1223,6 +1223,136 @@ textarea.form-control-custom { resize: vertical; }
 /* Toolbar divider */
 .sel-divider { border-left: 1px solid rgba(255,255,255,.12); padding-left: 20px; }
 
+/* ─── Keyword chips input component ─────────────────────────────────────────── */
+.kw-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-height: 40px;
+  cursor: text;
+  transition: border-color .15s;
+}
+.kw-chips-wrap:focus-within { border-color: var(--border-hover); }
+
+.kw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px 2px 10px;
+  background: rgba(99,102,241,.18);
+  border: 1px solid rgba(99,102,241,.35);
+  border-radius: 14px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  max-width: 240px;
+}
+.kw-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kw-chip-del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  transition: color .12s, background .12s;
+}
+.kw-chip-del:hover { color: var(--red); background: var(--red-dim); }
+
+.kw-chip-input {
+  flex: 1;
+  min-width: 110px;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 0;
+}
+.kw-chip-input::placeholder { color: var(--text-muted); }
+
+.kw-chip-add-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 5px;
+  font-size: 16px;
+  border-radius: 5px;
+  transition: color .12s, background .12s;
+  flex-shrink: 0;
+}
+.kw-chip-add-btn:hover { color: var(--blue); background: var(--blue-dim); }
+
+/* small readonly chips for list views */
+.kw-badge-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  padding: 1px 7px;
+  background: rgba(99,102,241,.12);
+  border: 1px solid rgba(99,102,241,.25);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* System tag badge */
+.tag-system-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(249,178,51,.15);
+  color: var(--blue);
+}
+
+/* auto-apply indicator */
+.tag-auto-badge {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(16,185,129,.15);
+  color: var(--green);
+}
+
+/* Tag manage list — extended */
+.tag-manage-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  flex-wrap: wrap;
+}
+.tag-manage-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tag-manage-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tag-manage-keywords { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.tag-manage-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+
 /* ─── Rules guide section ────────────────────────────────────────────────────── */
 .guide-section-title {
   font-size: 13px; font-weight: 700; color: var(--text);

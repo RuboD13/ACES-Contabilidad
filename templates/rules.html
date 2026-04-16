@@ -63,8 +63,12 @@
         <input type="text" class="form-control-custom" id="newLabel" placeholder="ej: Fee Plataforma">
       </div>
       <div class="col-md-8">
-        <label class="form-label-custom">Palabras clave <small class="text-muted">(separadas por coma)</small></label>
-        <input type="text" class="form-control-custom" id="newKeywords" placeholder="fee plataforma, comision plataforma">
+        <label class="form-label-custom">Palabras clave</label>
+        <div class="kw-chips-wrap" id="newKeywordsChips" onclick="document.getElementById('newKwInput').focus()">
+          <input class="kw-chip-input" id="newKwInput" placeholder="Escribe y pulsa Enter o +" autocomplete="off">
+          <button type="button" class="kw-chip-add-btn" title="Añadir" onclick="addChip('newKeywordsChips','newKwInput')">＋</button>
+        </div>
+        <input type="hidden" id="newKeywords">
       </div>
       <div class="col-md-4">
         <label class="form-label-custom">Prioridad <small class="text-muted">(menor = primero)</small></label>
@@ -122,15 +126,15 @@
   <div class="card-glass-body">
     <!-- New tag form (hidden) -->
     <div class="d-none mb-3 p-3" id="newTagForm" style="background:var(--bg-input);border-radius:var(--radius-sm)">
-      <div class="row g-2 align-items-end">
-        <div class="col-md-5">
+      <div class="row g-2">
+        <div class="col-md-4">
           <label class="form-label-custom">Nombre</label>
           <input class="form-control-custom" id="newTagName" placeholder="Ej: Revisado, Facturado, IRPF...">
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <label class="form-label-custom">Color</label>
           <div class="color-picker-grid" id="newTagColorPicker">
-            {% for c in ['#f9b233','#10b981','#f59e0b','#f43f5e','#06b6d4','#fb923c','#ec4899','#84cc16'] %}
+            {% for c in ['#f9b233','#10b981','#f59e0b','#f43f5e','#06b6d4','#fb923c','#ec4899','#9333ea'] %}
             <div class="color-swatch {% if loop.first %}selected{% endif %}"
                  data-color="{{ c }}" style="background:{{ c }}"
                  onclick="selectNewTagColor('{{ c }}')"></div>
@@ -138,14 +142,28 @@
           </div>
           <input type="hidden" id="newTagColor" value="#f9b233">
         </div>
-        <div class="col-md-3 d-flex gap-2">
-          <button class="btn-primary-custom sm" onclick="saveNewTag()"><i class="bi bi-check-lg me-1"></i>Crear</button>
-          <button class="btn-ghost-custom sm" onclick="hideNewTagForm()">Cancelar</button>
+        <div class="col-md-5">
+          <label class="form-label-custom">Palabras clave <small class="text-muted">(opcionales)</small></label>
+          <div class="kw-chips-wrap" id="newTagKwChips" onclick="document.getElementById('newTagKwInput').focus()">
+            <input class="kw-chip-input" id="newTagKwInput" placeholder="Escribe y pulsa Enter o +" autocomplete="off">
+            <button type="button" class="kw-chip-add-btn" onclick="addChip('newTagKwChips','newTagKwInput')">＋</button>
+          </div>
+          <input type="hidden" id="newTagKeywords">
+          <div class="mt-2 d-flex align-items-center gap-2">
+            <input type="checkbox" class="form-check-input" id="newTagAutoApply" style="width:15px;height:15px">
+            <label class="form-label-custom mb-0" for="newTagAutoApply" style="font-size:12px;cursor:pointer">
+              Aplicar automáticamente con estas palabras clave
+            </label>
+          </div>
         </div>
+      </div>
+      <div class="mt-2 d-flex gap-2">
+        <button class="btn-primary-custom sm" onclick="saveNewTag()"><i class="bi bi-check-lg me-1"></i>Crear</button>
+        <button class="btn-ghost-custom sm" onclick="hideNewTagForm()">Cancelar</button>
       </div>
     </div>
     <!-- Tags list -->
-    <div id="tagsList" class="d-flex flex-wrap gap-2">
+    <div id="tagsList" class="d-flex flex-column gap-2">
       <div class="text-muted small py-2">Cargando etiquetas...</div>
     </div>
   </div>
@@ -278,7 +296,56 @@
   </div>
 </div>
 
-<!-- Edit modal -->
+<!-- Edit tag modal -->
+<div class="modal fade" id="editTagModal" tabindex="-1">
+  <div class="modal-dialog modal-dark">
+    <div class="modal-content modal-content-dark">
+      <div class="modal-header-dark">
+        <h5 class="modal-title-dark">Editar Etiqueta</h5>
+        <button type="button" class="btn-close-dark" data-bs-dismiss="modal"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="modal-body-dark">
+        <input type="hidden" id="editTagId">
+        <div class="mb-3">
+          <label class="form-label-custom">Nombre</label>
+          <input type="text" class="form-control-custom" id="editTagName">
+        </div>
+        <div class="mb-3">
+          <label class="form-label-custom">Color</label>
+          <div class="color-picker-grid" id="editTagColorPicker">
+            {% for c in ['#f9b233','#10b981','#f59e0b','#f43f5e','#06b6d4','#fb923c','#ec4899','#9333ea'] %}
+            <div class="color-swatch" data-color="{{ c }}" style="background:{{ c }}"
+                 onclick="selectEditTagColor('{{ c }}')"></div>
+            {% endfor %}
+          </div>
+          <input type="hidden" id="editTagColor">
+        </div>
+        <div class="mb-3">
+          <label class="form-label-custom">Palabras clave <small class="text-muted">(opcionales)</small></label>
+          <div class="kw-chips-wrap" id="editTagKwChips" onclick="document.getElementById('editTagKwInput').focus()">
+            <input class="kw-chip-input" id="editTagKwInput" placeholder="Escribe y pulsa Enter o +" autocomplete="off">
+            <button type="button" class="kw-chip-add-btn" onclick="addChip('editTagKwChips','editTagKwInput')">＋</button>
+          </div>
+          <input type="hidden" id="editTagKeywords">
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <input type="checkbox" class="form-check-input" id="editTagAutoApply" style="width:15px;height:15px">
+          <label class="form-label-custom mb-0" for="editTagAutoApply" style="font-size:12px;cursor:pointer">
+            Aplicar automáticamente con estas palabras clave
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer-dark">
+        <button class="btn-ghost-custom sm" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn-primary-custom sm" onclick="saveEditTag()">
+          <i class="bi bi-check-lg me-1"></i>Guardar cambios
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit rule modal -->
 <div class="modal fade" id="editModal" tabindex="-1">
   <div class="modal-dialog modal-dark">
     <div class="modal-content modal-content-dark">
@@ -293,8 +360,12 @@
           <input type="text" class="form-control-custom" id="editLabel">
         </div>
         <div class="mb-3">
-          <label class="form-label-custom">Palabras clave <small class="text-muted">(separadas por coma)</small></label>
-          <input type="text" class="form-control-custom" id="editKeywords">
+          <label class="form-label-custom">Palabras clave</label>
+          <div class="kw-chips-wrap" id="editKeywordsChips" onclick="document.getElementById('editKwInput').focus()">
+            <input class="kw-chip-input" id="editKwInput" placeholder="Escribe y pulsa Enter o +" autocomplete="off">
+            <button type="button" class="kw-chip-add-btn" title="Añadir" onclick="addChip('editKeywordsChips','editKwInput')">＋</button>
+          </div>
+          <input type="hidden" id="editKeywords">
         </div>
         <div class="mb-3">
           <label class="form-label-custom">Prioridad</label>
@@ -323,7 +394,83 @@
 </script>
 <script src="{{ url_for('static', filename='js/transactions.js') }}"></script>
 <script>
-// Rules page specific JS
+// ── Keyword Chips Component ────────────────────────────────────────────────────
+function getChips(wrapperId) {
+  const wrap = document.getElementById(wrapperId);
+  return Array.from(wrap.querySelectorAll('.kw-chip')).map(c => c.dataset.value);
+}
+
+function setChips(wrapperId, keywords, inputId) {
+  const wrap  = document.getElementById(wrapperId);
+  const input = document.getElementById(inputId);
+  const addBtn = wrap.querySelector('.kw-chip-add-btn');
+  // Remove existing chips
+  wrap.querySelectorAll('.kw-chip').forEach(c => c.remove());
+  // Render chips before input
+  keywords.forEach(kw => {
+    const chip = _makeChip(kw, wrapperId, inputId);
+    wrap.insertBefore(chip, input);
+  });
+  // Update hidden field
+  const hiddenId = wrapperId === 'newKeywordsChips' ? 'newKeywords'
+    : wrapperId === 'editKeywordsChips' ? 'editKeywords'
+    : wrapperId === 'newTagKwChips'     ? 'newTagKeywords'
+    : wrapperId === 'editTagKwChips'    ? 'editTagKeywords'
+    : null;
+  if (hiddenId) document.getElementById(hiddenId).value = JSON.stringify(keywords);
+}
+
+function _makeChip(value, wrapperId, inputId) {
+  const chip = document.createElement('span');
+  chip.className = 'kw-chip';
+  chip.dataset.value = value;
+  chip.innerHTML = `<span>${escRules(value)}</span><button type="button" class="kw-chip-del" title="Quitar">×</button>`;
+  chip.querySelector('.kw-chip-del').addEventListener('click', e => {
+    e.stopPropagation();
+    chip.remove();
+    _syncHidden(wrapperId);
+  });
+  return chip;
+}
+
+function addChip(wrapperId, inputId) {
+  const wrap  = document.getElementById(wrapperId);
+  const input = document.getElementById(inputId);
+  const val   = input.value.trim().toLowerCase();
+  if (!val) return;
+  const existing = getChips(wrapperId);
+  if (existing.includes(val)) { input.value = ''; return; }
+  const chip = _makeChip(val, wrapperId, inputId);
+  wrap.insertBefore(chip, input);
+  input.value = '';
+  _syncHidden(wrapperId);
+  input.focus();
+}
+
+function _syncHidden(wrapperId) {
+  const hiddenId = wrapperId === 'newKeywordsChips' ? 'newKeywords'
+    : wrapperId === 'editKeywordsChips' ? 'editKeywords'
+    : wrapperId === 'newTagKwChips'     ? 'newTagKeywords'
+    : wrapperId === 'editTagKwChips'    ? 'editTagKeywords'
+    : null;
+  if (hiddenId) document.getElementById(hiddenId).value = JSON.stringify(getChips(wrapperId));
+}
+
+// Bind Enter key on chip inputs
+document.addEventListener('DOMContentLoaded', () => {
+  [['newKwInput','newKeywordsChips'],
+   ['editKwInput','editKeywordsChips'],
+   ['newTagKwInput','newTagKwChips'],
+   ['editTagKwInput','editTagKwChips']].forEach(([inId, wId]) => {
+    const el = document.getElementById(inId);
+    if (el) el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); addChip(wId, inId); }
+      if (e.key === ',' )    { e.preventDefault(); addChip(wId, inId); }
+    });
+  });
+});
+
+// ── Rules ─────────────────────────────────────────────────────────────────────
 let allRules = [];
 
 async function loadRules() {
@@ -335,10 +482,8 @@ async function loadRules() {
 function renderRules() {
   const income  = allRules.filter(r => r.category_type === 'income'  && r.is_active);
   const expense = allRules.filter(r => r.category_type === 'expense' && r.is_active);
-
   document.getElementById('countIncome').textContent  = income.length;
   document.getElementById('countExpense').textContent = expense.length;
-
   document.getElementById('incomeRules').innerHTML  = renderRulesList(income);
   document.getElementById('expenseRules').innerHTML = renderRulesList(expense);
 }
@@ -346,11 +491,11 @@ function renderRules() {
 function renderRulesList(rules) {
   if (!rules.length) return '<div class="empty-rules">Sin reglas activas</div>';
   return rules.map(r => {
-    const kws = JSON.parse(r.keywords || '[]');
+    const kws = (typeof r.keywords === 'string') ? JSON.parse(r.keywords || '[]') : (r.keywords || []);
     return `
     <div class="rule-card" data-id="${r.id}">
       <div class="rule-header">
-        <span class="rule-label">${r.category_label}</span>
+        <span class="rule-label">${escRules(r.category_label)}</span>
         <div class="rule-actions">
           <button class="icon-btn" onclick='openEditModal(${JSON.stringify(r)})' title="Editar"><i class="bi bi-pencil"></i></button>
           <button class="icon-btn danger" onclick="deleteRule(${r.id})" title="Desactivar"><i class="bi bi-trash"></i></button>
@@ -358,13 +503,16 @@ function renderRulesList(rules) {
       </div>
       <div class="rule-meta">
         <span class="priority-badge">P${r.priority}</span>
-        ${kws.map(k => `<span class="kw-badge">${k}</span>`).join('')}
+        ${kws.map(k => `<span class="kw-badge">${escRules(k)}</span>`).join('')}
       </div>
     </div>`;
   }).join('');
 }
 
-function showNewRuleForm()  { document.getElementById('newRuleForm').classList.remove('d-none'); }
+function showNewRuleForm()  {
+  document.getElementById('newRuleForm').classList.remove('d-none');
+  setChips('newKeywordsChips', [], 'newKwInput');
+}
 function hideNewRuleForm()  { document.getElementById('newRuleForm').classList.add('d-none'); }
 
 let newRuleTipo = 'income';
@@ -379,17 +527,16 @@ document.querySelectorAll('#newRuleTipo .seg-btn').forEach(btn => {
 async function saveNewRule() {
   const key   = document.getElementById('newKey').value.trim().replace(/\s+/g,'_');
   const label = document.getElementById('newLabel').value.trim();
-  const kws   = document.getElementById('newKeywords').value.trim();
+  const kws   = getChips('newKeywordsChips');
   const prio  = parseInt(document.getElementById('newPriority').value) || 100;
-  if (!key || !label || !kws) { alert('Rellena todos los campos.'); return; }
-
+  if (!key || !label || !kws.length) { alert('Rellena todos los campos y añade al menos una palabra clave.'); return; }
   const res = await fetch('/api/rules', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ category_key: key, category_label: label,
                            category_type: newRuleTipo, keywords: kws, priority: prio })
   });
-  if (res.ok) { hideNewRuleForm(); loadRules(); }
+  if (res.ok) { hideNewRuleForm(); document.getElementById('newKey').value = ''; document.getElementById('newLabel').value = ''; loadRules(); }
   else { const e = await res.json(); alert(e.error); }
 }
 
@@ -397,23 +544,25 @@ let _editRuleModal = null;
 function openEditModal(rule) {
   document.getElementById('editRuleId').value = rule.id;
   document.getElementById('editLabel').value  = rule.category_label;
-  const kws = JSON.parse(rule.keywords || '[]');
-  document.getElementById('editKeywords').value  = kws.join(', ');
-  document.getElementById('editPriority').value  = rule.priority;
+  document.getElementById('editPriority').value = rule.priority;
+  const kws = (typeof rule.keywords === 'string') ? JSON.parse(rule.keywords || '[]') : (rule.keywords || []);
+  // Wait for modal to be visible before setting chips
   if (typeof bootstrap !== 'undefined') {
     if (!_editRuleModal) _editRuleModal = new bootstrap.Modal(document.getElementById('editModal'));
     _editRuleModal.show();
+    setTimeout(() => setChips('editKeywordsChips', kws, 'editKwInput'), 80);
   }
 }
 
 async function saveEditRule() {
   const id  = document.getElementById('editRuleId').value;
+  const kws = getChips('editKeywordsChips');
   const res = await fetch(`/api/rules/${id}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       category_label: document.getElementById('editLabel').value.trim(),
-      keywords:       document.getElementById('editKeywords').value.trim(),
+      keywords:       kws,
       priority:       parseInt(document.getElementById('editPriority').value),
     })
   });
@@ -477,23 +626,41 @@ function renderTags() {
     container.innerHTML = '<div class="text-muted small py-2">Sin etiquetas. Crea la primera.</div>';
     return;
   }
-  container.innerHTML = allTagsData.map(t => `
+  container.innerHTML = allTagsData.map(t => {
+    const kws = Array.isArray(t.keywords) ? t.keywords : [];
+    const kwHtml = kws.length
+      ? kws.map(k => `<span class="kw-badge-chip">${escRules(k)}</span>`).join('')
+      : '<span class="text-muted" style="font-size:11px">Sin palabras clave</span>';
+    const sysB  = t.is_system ? '<span class="tag-system-badge ms-1">Sistema</span>' : '';
+    const autoB = t.is_auto_apply ? '<span class="tag-auto-badge ms-1">Auto</span>' : '';
+    return `
     <div class="tag-manage-item" id="tag-item-${t.id}">
-      <span class="tag-color-pill" style="background:${t.color}22;color:${t.color};border-color:${t.color}44">
-        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${t.color};margin-right:5px"></span>
-        ${escRules(t.name)}
-      </span>
-      <button class="icon-btn" style="padding:2px 5px" onclick="openEditTag(${t.id},'${escRules(t.name)}','${t.color}')" title="Editar">
-        <i class="bi bi-pencil" style="font-size:11px"></i>
-      </button>
-      <button class="icon-btn danger" style="padding:2px 5px" onclick="deleteTagData(${t.id})" title="Eliminar">
-        <i class="bi bi-x-lg" style="font-size:11px"></i>
-      </button>
-    </div>
-  `).join('');
+      <div class="tag-manage-info">
+        <div class="tag-manage-name">
+          <span class="tag-color-pill" style="background:${t.color}22;color:${t.color};border-color:${t.color}44">
+            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${t.color};margin-right:5px"></span>
+            ${escRules(t.name)}
+          </span>
+          ${sysB}${autoB}
+        </div>
+        <div class="tag-manage-keywords">${kwHtml}</div>
+      </div>
+      <div class="tag-manage-actions">
+        <button class="icon-btn" onclick='openEditTagModal(${JSON.stringify(t)})' title="Editar">
+          <i class="bi bi-pencil" style="font-size:11px"></i>
+        </button>
+        <button class="icon-btn danger" onclick="deleteTagData(${t.id})" title="Eliminar">
+          <i class="bi bi-x-lg" style="font-size:11px"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function showNewTagForm()  { document.getElementById('newTagForm').classList.remove('d-none'); }
+function showNewTagForm() {
+  document.getElementById('newTagForm').classList.remove('d-none');
+  setChips('newTagKwChips', [], 'newTagKwInput');
+}
 function hideNewTagForm()  { document.getElementById('newTagForm').classList.add('d-none'); }
 
 function selectNewTagColor(c) {
@@ -503,27 +670,64 @@ function selectNewTagColor(c) {
   );
 }
 
+function selectEditTagColor(c) {
+  document.getElementById('editTagColor').value = c;
+  document.querySelectorAll('#editTagColorPicker .color-swatch').forEach(s =>
+    s.classList.toggle('selected', s.dataset.color === c)
+  );
+}
+
 async function saveNewTag() {
-  const name  = document.getElementById('newTagName').value.trim();
-  const color = document.getElementById('newTagColor').value;
+  const name     = document.getElementById('newTagName').value.trim();
+  const color    = document.getElementById('newTagColor').value;
+  const kws      = getChips('newTagKwChips');
+  const autoApply = document.getElementById('newTagAutoApply').checked;
   if (!name) { document.getElementById('newTagName').focus(); return; }
   const res = await fetch('/api/tags', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ name, color })
+    body: JSON.stringify({ name, color, keywords: kws, is_auto_apply: autoApply })
   });
-  if (res.ok) { hideNewTagForm(); document.getElementById('newTagName').value = ''; loadTagsData(); }
-  else { const e = await res.json(); alert(e.error); }
+  if (res.ok) {
+    hideNewTagForm();
+    document.getElementById('newTagName').value = '';
+    document.getElementById('newTagAutoApply').checked = false;
+    setChips('newTagKwChips', [], 'newTagKwInput');
+    loadTagsData();
+  } else { const e = await res.json(); alert(e.error); }
 }
 
-function openEditTag(id, name, color) {
-  const newName = prompt('Nombre de la etiqueta:', name);
-  if (newName === null) return;
-  fetch(`/api/tags/${id}`, {
+let _editTagModal = null;
+function openEditTagModal(tag) {
+  document.getElementById('editTagId').value    = tag.id;
+  document.getElementById('editTagName').value  = tag.name;
+  document.getElementById('editTagColor').value = tag.color;
+  document.getElementById('editTagAutoApply').checked = !!tag.is_auto_apply;
+  // Select correct color swatch
+  document.querySelectorAll('#editTagColorPicker .color-swatch').forEach(s =>
+    s.classList.toggle('selected', s.dataset.color === tag.color)
+  );
+  if (typeof bootstrap !== 'undefined') {
+    if (!_editTagModal) _editTagModal = new bootstrap.Modal(document.getElementById('editTagModal'));
+    _editTagModal.show();
+    const kws = Array.isArray(tag.keywords) ? tag.keywords : [];
+    setTimeout(() => setChips('editTagKwChips', kws, 'editTagKwInput'), 80);
+  }
+}
+
+async function saveEditTag() {
+  const id       = document.getElementById('editTagId').value;
+  const name     = document.getElementById('editTagName').value.trim();
+  const color    = document.getElementById('editTagColor').value;
+  const kws      = getChips('editTagKwChips');
+  const autoApply = document.getElementById('editTagAutoApply').checked;
+  if (!name) return;
+  const res = await fetch(`/api/tags/${id}`, {
     method: 'PUT',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ name: newName.trim(), color })
-  }).then(() => loadTagsData());
+    body: JSON.stringify({ name, color, keywords: kws, is_auto_apply: autoApply })
+  });
+  if (res.ok) { _editTagModal?.hide(); loadTagsData(); }
 }
 
 async function deleteTagData(id) {

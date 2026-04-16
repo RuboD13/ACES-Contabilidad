@@ -21,6 +21,7 @@ CATEGORY_COLORS = {
     'software':            '#fbbf24',
     'gestoria':            '#a78bfa',
     'seguros':             '#34d399',
+    'liquidacion_propietarios': '#9333ea',
     'comisiones_banco':    '#94a3b8',
     'otros_gastos':        '#6b7280',
     'sin_categoria':       '#4b5563',
@@ -161,6 +162,18 @@ SEED_RULES = [
         'keywords': [
             'seguro', 'prima seguro', 'axa', 'mapfre',
             'allianz', 'zurich', 'mutua',
+        ],
+    },
+    {
+        'key': 'liquidacion_propietarios',
+        'label': 'Liquidación a Propietarios',
+        'type': 'expense',
+        'priority': 55,
+        'keywords': [
+            'liquidacion', 'liquidación',
+            'pago propietario', 'transferencia propietario',
+            'abono propietario', 'dinero propietario',
+            'liquidacion propietario', 'liquidación propietario',
         ],
     },
     {

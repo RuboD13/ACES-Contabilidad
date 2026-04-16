@@ -3,13 +3,14 @@
 if (typeof RULES !== 'undefined') {
 
 const COLORS = {
-  honorarios_gestion:  '#10b981', busqueda_inquilinos: '#06b6d4',
-  fee_garantia:        '#f59e0b', fee_suministros:     '#fb923c',
-  fee_reparaciones:    '#ec4899', otros_ingresos:      '#64748b',
-  nominas:             '#f43f5e', marketing:           '#fb923c',
-  software:            '#fbbf24', gestoria:            '#a78bfa',
-  seguros:             '#34d399', comisiones_banco:    '#94a3b8',
-  otros_gastos:        '#6b7280', sin_categoria:       '#4b5563',
+  honorarios_gestion:       '#10b981', busqueda_inquilinos:      '#06b6d4',
+  fee_garantia:             '#f59e0b', fee_suministros:          '#8b5cf6',
+  fee_reparaciones:         '#ec4899', otros_ingresos:           '#64748b',
+  renta_inquilinos:         '#14b8a6', nominas:                  '#f43f5e',
+  marketing:                '#fb923c', software:                 '#fbbf24',
+  gestoria:                 '#a78bfa', seguros:                  '#34d399',
+  liquidacion_propietarios: '#9333ea', comisiones_banco:         '#94a3b8',
+  otros_gastos:             '#6b7280', sin_categoria:            '#4b5563',
 };
 
 const RULE_MAP = {};

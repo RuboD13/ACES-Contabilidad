@@ -68,11 +68,14 @@ CREATE TABLE IF NOT EXISTS categorization_rules (
 );
 
 CREATE TABLE IF NOT EXISTS tags (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT NOT NULL,
-    color      TEXT DEFAULT '#6366f1',
-    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
-    created_at TEXT DEFAULT (datetime('now'))
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL,
+    color         TEXT DEFAULT '#6366f1',
+    account_id    INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    keywords      TEXT DEFAULT '[]',
+    is_auto_apply INTEGER DEFAULT 0,
+    is_system     INTEGER DEFAULT 0,
+    created_at    TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS transaction_tags (
@@ -162,6 +165,15 @@ def _migrate(conn):
         log_cols = [r[1] for r in conn.execute("PRAGMA table_info(action_log)").fetchall()]
         if 'details' not in log_cols:
             conn.execute("ALTER TABLE action_log ADD COLUMN details TEXT DEFAULT NULL")
+    # tags table migrations
+    if 'tags' in tables:
+        tag_cols = [r[1] for r in conn.execute("PRAGMA table_info(tags)").fetchall()]
+        if 'keywords' not in tag_cols:
+            conn.execute("ALTER TABLE tags ADD COLUMN keywords TEXT DEFAULT '[]'")
+        if 'is_auto_apply' not in tag_cols:
+            conn.execute("ALTER TABLE tags ADD COLUMN is_auto_apply INTEGER DEFAULT 0")
+        if 'is_system' not in tag_cols:
+            conn.execute("ALTER TABLE tags ADD COLUMN is_system INTEGER DEFAULT 0")
     # New tables added later — already handled by CREATE TABLE IF NOT EXISTS in _SCHEMA
 
 
