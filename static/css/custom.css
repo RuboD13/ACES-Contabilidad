@@ -515,6 +515,23 @@ textarea.form-control-custom { resize: vertical; }
 }
 .recon-status.ok    { background: var(--green-dim); color: var(--green); }
 .recon-status.error { background: var(--red-dim);   color: var(--red); }
+.recon-status.warn  { background: rgba(245,158,11,.1); color: #f59e0b; }
+.recon-explanations { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+.recon-explanation {
+  font-size: 11.5px; color: var(--text-secondary); line-height: 1.45;
+  display: flex; align-items: flex-start; gap: 4px;
+  padding: 5px 8px; background: rgba(244,63,94,.06); border-radius: 6px;
+}
+.recon-explanation i { color: var(--red); flex-shrink: 0; margin-top: 1px; }
+.recon-saldo-input { border-top: 1px solid var(--border); padding-top: 12px; }
+.btn-xs-accent {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 10px; border-radius: var(--radius-sm);
+  background: var(--blue); color: #fff; border: none; cursor: pointer;
+  font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  transition: opacity .2s;
+}
+.btn-xs-accent:hover { opacity: .85; }
 
 /* ─── Submetrics table ───────────────────────────────────────────────────────── */
 .trend-up   { color: var(--green); font-weight: 600; }

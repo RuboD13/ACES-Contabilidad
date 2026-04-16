@@ -323,8 +323,39 @@ function renderReconciliation(recon, companion) {
 
 function renderReconCard(r) {
   const ok = r.is_reconciled;
+  const hasError = !ok && r.diferencia !== null;
+  const noSaldo  = !ok && r.diferencia === null;
+
+  // Build incoherence explanation
+  let explanations = [];
+  if (hasError) {
+    const dif = Math.abs(r.diferencia);
+    const signo = r.diferencia > 0 ? 'positiva' : 'negativa';
+    explanations.push(`La diferencia de ${formatEur(dif)} (${signo}) indica que hay movimientos no registrados o un saldo inicial incorrecto.`);
+    if (r.saldo_inicial === 0) {
+      explanations.push('El saldo inicial es 0 — ¿has introducido el saldo real del inicio del período?');
+    }
+    if (r.diferencia > 0) {
+      explanations.push('Saldo calculado mayor que el real: pueden faltar gastos por registrar o el saldo inicial es demasiado alto.');
+    } else {
+      explanations.push('Saldo calculado menor que el real: pueden faltar ingresos por registrar o el saldo inicial es demasiado bajo.');
+    }
+    if (r.tipo === 'caja') {
+      explanations.push('En caja: verifica que todos los cobros y pagos en efectivo están incluidos en el extracto.');
+    } else {
+      explanations.push('En banco: comprueba que no hay movimientos en el extracto bancario sin importar.');
+    }
+  }
+  if (noSaldo) {
+    if (r.tipo === 'caja') {
+      explanations.push('El archivo de caja no incluye columna de saldo. Introduce el saldo final manualmente para poder cuadrar.');
+    } else {
+      explanations.push('El extracto bancario no incluye columna de saldo. Sin saldo de referencia no se puede verificar el cuadre.');
+    }
+  }
+
   return `
-  <div class="recon-card ${ok ? 'ok' : r.diferencia !== null ? 'error' : ''}">
+  <div class="recon-card ${ok ? 'ok' : hasError ? 'error' : ''}">
     <div class="recon-title">
       <i class="bi bi-${r.tipo === 'banco' ? 'bank' : 'cash-coin'}"></i>
       Cuadre de ${r.tipo === 'banco' ? 'Banco' : 'Caja'}
@@ -355,14 +386,51 @@ function renderReconCard(r) {
       <span class="value">${formatEur(r.diferencia)}</span>
     </div>
     ` : ''}
-    <div class="recon-status ${ok ? 'ok' : r.diferencia !== null ? 'error' : ''}">
+    <div class="recon-status ${ok ? 'ok' : hasError ? 'error' : 'warn'}">
       ${ok
         ? '<i class="bi bi-check-circle-fill"></i> Cuadre correcto'
-        : r.diferencia !== null
-          ? '<i class="bi bi-exclamation-triangle-fill"></i> Diferencia detectada'
-          : '<i class="bi bi-info-circle"></i> Introduce saldo final para cuadrar'}
+        : hasError
+          ? '<i class="bi bi-exclamation-triangle-fill"></i> Incoherencia detectada'
+          : '<i class="bi bi-info-circle"></i> Sin saldo de referencia'}
     </div>
+    ${explanations.length ? `
+    <div class="recon-explanations">
+      ${explanations.map(e => `<div class="recon-explanation"><i class="bi bi-arrow-right-short"></i>${e}</div>`).join('')}
+    </div>` : ''}
+    ${r.saldo_final_csv == null ? `
+    <div class="recon-saldo-input mt-3">
+      <label class="form-label-custom mb-1" style="font-size:11px">Introducir saldo final (${r.tipo === 'caja' ? 'caja' : 'banco'})</label>
+      <div class="input-group-custom">
+        <span class="input-prefix">€</span>
+        <input type="text" class="form-control-custom" id="reconSaldoInput-${r.period_id}"
+               placeholder="0,00" style="font-size:12px;padding:5px 8px 5px 24px">
+        <button class="btn-xs-accent ms-2" onclick="saveReconSaldo(${r.period_id})">
+          <i class="bi bi-check"></i> Guardar
+        </button>
+      </div>
+    </div>` : ''}
   </div>`;
+}
+
+async function saveReconSaldo(periodId) {
+  const input = document.getElementById(`reconSaldoInput-${periodId}`);
+  if (!input) return;
+  const val = parseFloat(input.value.replace(',', '.'));
+  if (isNaN(val)) { input.classList.add('is-invalid'); return; }
+  input.classList.remove('is-invalid');
+  try {
+    const res = await fetch(`/api/periods/${periodId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saldo_final_csv: val }),
+    });
+    if (res.ok) {
+      // Reload metrics to re-render reconciliation
+      loadDashboard();
+    }
+  } catch(e) {
+    console.error('Error saving saldo:', e);
+  }
 }
 
 // ── Submetrics table ──────────────────────────────────────────────────────────

@@ -49,6 +49,19 @@ async function handleFile(file) {
     if (data.error) { showError(data.error); setDropState('error', file.name); return; }
 
     setDropState('ok', file.name);
+    // Auto-select tipo based on server suggestion
+    if (data.tipo_sugerido) {
+      document.querySelectorAll('input[name="_tipo_ui"]').forEach(r => {
+        r.checked = (r.value === data.tipo_sugerido);
+      });
+      document.getElementById('tipoHidden').value = data.tipo_sugerido;
+      const hint = document.getElementById('tipoAutoHint');
+      if (hint) {
+        const label = data.tipo_sugerido === 'caja' ? 'Caja (detectado automáticamente)' : 'Banco (detectado automáticamente)';
+        hint.textContent = label;
+        hint.classList.remove('d-none');
+      }
+    }
     renderPreview(data);
   } catch (e) {
     el('parsingSpinner').classList.add('d-none');

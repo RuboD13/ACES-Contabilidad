@@ -157,15 +157,38 @@ def upload_preview():
     periods = detect_periods(txs)
 
     return jsonify({
-        'rows':          txs[:15],
-        'total':         len(txs),
-        'date_from':     parsed['date_from'],
-        'date_to':       parsed['date_to'],
-        'saldo_inicial': parsed['saldo_inicial'],
-        'saldo_final':   parsed['saldo_final'],
-        'warnings':      parsed['warnings'],
-        'periods':       periods,
+        'rows':           txs[:15],
+        'total':          len(txs),
+        'date_from':      parsed['date_from'],
+        'date_to':        parsed['date_to'],
+        'saldo_inicial':  parsed['saldo_inicial'],
+        'saldo_final':    parsed['saldo_final'],
+        'warnings':       parsed['warnings'],
+        'periods':        periods,
+        'tipo_sugerido':  parsed.get('tipo_sugerido', 'banco'),
     })
+
+
+@upload_bp.route('/api/periods/<int:period_id>', methods=['PATCH'])
+def patch_period(period_id):
+    """Update editable period fields (saldo_final_csv, saldo_inicial, notes)."""
+    data = request.get_json(force=True) or {}
+    conn = get_db()
+    try:
+        allowed = {'saldo_final_csv', 'saldo_inicial', 'notes'}
+        updates = {k: v for k, v in data.items() if k in allowed}
+        if not updates:
+            return jsonify({'error': 'Sin campos válidos'}), 400
+        set_clause = ', '.join(f"{k}=?" for k in updates)
+        conn.execute(f"UPDATE periods SET {set_clause} WHERE id=?",
+                     list(updates.values()) + [period_id])
+        conn.commit()
+        row = conn.execute("SELECT * FROM periods WHERE id=?", [period_id]).fetchone()
+        if not row:
+            return jsonify({'error': 'Período no encontrado'}), 404
+        return jsonify(dict(zip(row.keys(), tuple(row))))
+    finally:
+        conn.close()
 
 
 @upload_bp.route('/api/periods/<int:period_id>', methods=['DELETE'])

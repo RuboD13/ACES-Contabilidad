@@ -63,6 +63,13 @@ def parse_file(file_storage):
     if transactions[-1].get('saldo') is not None:
         saldo_final = transactions[-1]['saldo']
 
+    # Detect tipo from header keywords
+    matrix_header = [c.strip().strip('"').strip("'") for c in lines[header_idx].split(sep)]
+    tipo_sugerido = _detect_tipo_sugerido([matrix_header] + [
+        [c.strip().strip('"').strip("'") for c in l.split(sep)]
+        for l in lines[header_idx + 1: header_idx + 6] if l.strip()
+    ], 0, col_map)
+
     return {
         'transactions':      transactions,
         'saldo_inicial':     saldo_inicial,
@@ -71,6 +78,7 @@ def parse_file(file_storage):
         'date_to':           transactions[-1]['fecha'],
         'warnings':          warnings,
         'detected_columns':  col_map,
+        'tipo_sugerido':     tipo_sugerido,
     }
 
 
@@ -121,23 +129,29 @@ def _best_separator(line):
 
 # Strategy 1: exact column name sets
 _EXACT_FECHA    = {'data', 'fecha', 'fecha operacion', 'fecha valor', 'f.operacion',
-                   'f. operacion', 'fecha movimiento', 'date'}
+                   'f. operacion', 'fecha movimiento', 'date', 'dia', 'fecha cobro',
+                   'fecha pago', 'fecha transaccion', 'fecha movim'}
 _EXACT_IMPORT   = {'import', 'importe', 'importe (eur)', 'importe(eur)', 'importe eur',
-                   'amount', 'monto', 'importe €', 'euros', 'importe en euros'}
+                   'amount', 'monto', 'importe €', 'euros', 'importe en euros',
+                   'importe caja', 'movimiento'}
 _EXACT_CONCEPTO = {'concepte', 'concepto', 'descripcion', 'descripción', 'description',
-                   'texto', 'motivo', 'detalle', 'concepto/descripcion', 'concepto / descripcion'}
+                   'texto', 'motivo', 'detalle', 'concepto/descripcion', 'concepto / descripcion',
+                   'operacion', 'operación', 'movimiento descripcion', 'concepto operacion'}
 _EXACT_SALDO    = {'saldo', 'saldo (eur)', 'saldo(eur)', 'disponible', 'saldo €',
-                   'balance', 'saldo disponible', 'saldo contable'}
-_EXACT_CARGO    = {'cargo', 'cargos', 'debe', 'debito', 'débito', 'salida', 'salidas'}
-_EXACT_ABONO    = {'abono', 'abonos', 'haber', 'credito', 'crédito', 'entrada', 'entradas'}
+                   'balance', 'saldo disponible', 'saldo contable',
+                   'saldo caja', 'saldo final', 'saldo final caja', 'saldo actual'}
+_EXACT_CARGO    = {'cargo', 'cargos', 'debe', 'debito', 'débito', 'salida', 'salidas',
+                   'pago', 'pagos', 'gasto', 'gastos', 'salida caja', 'pagos caja'}
+_EXACT_ABONO    = {'abono', 'abonos', 'haber', 'credito', 'crédito', 'entrada', 'entradas',
+                   'cobro', 'cobros', 'ingreso', 'ingresos', 'entrada caja', 'cobros caja'}
 
 # Strategy 2: partial keyword match (substring)
-_PARTIAL_FECHA    = ['fecha', 'date', 'data', 'dia ', 'dia_', 'f.ope']
-_PARTIAL_IMPORT   = ['importe', 'import', 'monto', 'amount', 'valor', 'euros']
-_PARTIAL_CONCEPTO = ['concepto', 'descripci', 'descrip', 'detail', 'texto', 'motivo']
+_PARTIAL_FECHA    = ['fecha', 'date', 'data', 'dia ', 'dia_', 'f.ope', 'cobro', 'movim']
+_PARTIAL_IMPORT   = ['importe', 'import', 'monto', 'amount', 'valor', 'euros', 'movimiento']
+_PARTIAL_CONCEPTO = ['concepto', 'descripci', 'descrip', 'detail', 'texto', 'motivo', 'operaci']
 _PARTIAL_SALDO    = ['saldo', 'balance', 'disponib']
-_PARTIAL_CARGO    = ['cargo', 'debe', 'debito', 'debito', 'salida']
-_PARTIAL_ABONO    = ['abono', 'haber', 'credito', 'entrada']
+_PARTIAL_CARGO    = ['cargo', 'debe', 'debito', 'salida', 'pago', 'gasto']
+_PARTIAL_ABONO    = ['abono', 'haber', 'credito', 'entrada', 'cobro', 'ingreso']
 
 
 def _normalize(s):
@@ -180,16 +194,18 @@ def _strategy_partial(lines):
 
 def _strategy_data_inference(lines):
     """Scan data rows to infer which column contains dates and which contains numbers."""
-    for header_idx in range(min(30, len(lines))):
+    for header_idx in range(min(50, len(lines))):
         line = lines[header_idx]
         sep  = _best_separator(line)
         n    = len(line.split(sep))
         if n < 2:
             continue
 
-        data_rows = [l for l in lines[header_idx + 1: header_idx + 8] if l.strip()]
-        if len(data_rows) < 2:
+        data_rows = [l for l in lines[header_idx + 1: header_idx + 10] if l.strip()]
+        if not data_rows:
             continue
+
+        min_score = 1 if len(data_rows) < 3 else 2
 
         date_score   = [0] * n
         amount_score = [0] * n
@@ -206,12 +222,12 @@ def _strategy_data_inference(lines):
                 text_len[i] += len(clean)
 
         best_date   = max(range(n), key=lambda i: date_score[i])
-        if date_score[best_date] < 2:
+        if date_score[best_date] < min_score:
             continue
 
         candidates = [i for i in range(n) if i != best_date]
         best_amount = max(candidates, key=lambda i: amount_score[i], default=None)
-        if best_amount is None or amount_score[best_amount] < 2:
+        if best_amount is None or amount_score[best_amount] < min_score:
             continue
 
         cm = {'fecha': best_date, 'importe': best_amount}
@@ -231,6 +247,27 @@ def _strategy_data_inference(lines):
         return header_idx, cm, sep
 
     return None, None, None
+
+
+_CAJA_KEYWORDS = ['caja', 'efectivo', 'cash', 'cobro', 'cobros', 'pago', 'pagos',
+                  'saldo caja', 'saldo final caja', 'entrada caja', 'salida caja']
+
+
+def _detect_tipo_sugerido(matrix, header_idx, col_map):
+    """Return 'caja' if column headers or file content hints at a cash register; else 'banco'."""
+    if header_idx is None:
+        return 'banco'
+    header_row = [_normalize(c) for c in matrix[header_idx]]
+    joined = ' '.join(header_row)
+    for kw in _CAJA_KEYWORDS:
+        if kw in joined:
+            return 'caja'
+    # Check first few data rows for "caja" mentions in concepto
+    for row in matrix[header_idx + 1: header_idx + 6]:
+        row_text = _normalize(' '.join(row))
+        if 'caja' in row_text or 'efectivo' in row_text:
+            return 'caja'
+    return 'banco'
 
 
 def _build_col_map(cols, fecha_set, import_set, concepto_set, saldo_set,
@@ -272,7 +309,9 @@ def _build_col_map(cols, fecha_set, import_set, concepto_set, saldo_set,
 # ── Row parsing ────────────────────────────────────────────────────────────────
 
 _DATE_FORMATS = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d/%m/%y',
-                 '%Y/%m/%d', '%m/%d/%Y', '%d.%m.%Y']
+                 '%Y/%m/%d', '%m/%d/%Y', '%d.%m.%Y', '%Y.%m.%d',
+                 '%d %b %Y', '%d-%b-%Y', '%d %B %Y', '%B %d, %Y',
+                 '%d/%m/%Y %H:%M:%S', '%Y-%m-%d %H:%M:%S']
 
 
 def _parse_date(raw):
@@ -432,9 +471,21 @@ def _parse_excel(file_storage, ext):
     # Reuse the same header-detection strategies, adapted for matrix rows
     header_idx, col_map = _find_header_in_matrix(matrix)
     if header_idx is None:
+        # Build a helpful error with the column names we found
+        sample_cols = []
+        for row in matrix[:10]:
+            vals = [c.strip() for c in row if c.strip()]
+            if vals:
+                sample_cols = vals
+                break
+        hint = (f" Columnas encontradas: {', '.join(sample_cols[:8])}" if sample_cols else '')
         raise ValueError(
             "No se pudo detectar columnas de fecha e importe en el archivo Excel."
+            + hint +
+            " Asegúrate de que el archivo tiene columnas con fechas y cantidades."
         )
+
+    tipo_sugerido = _detect_tipo_sugerido(matrix, header_idx, col_map)
 
     # Extract original column headers for raw_data storage
     headers = [str(c).strip() for c in matrix[header_idx]]
@@ -460,6 +511,7 @@ def _parse_excel(file_storage, ext):
         'date_to':          transactions[-1]['fecha'],
         'warnings':         warnings,
         'detected_columns': col_map,
+        'tipo_sugerido':    tipo_sugerido,
     }
 
 
@@ -493,14 +545,17 @@ def _strat_partial_mat(matrix):
 
 
 def _strat_data_mat(matrix):
-    for header_idx in range(min(20, len(matrix))):
+    for header_idx in range(min(50, len(matrix))):
         row = matrix[header_idx]
         n   = len(row)
         if n < 2:
             continue
-        data_rows = [r for r in matrix[header_idx + 1: header_idx + 8] if any(c.strip() for c in r)]
-        if len(data_rows) < 2:
+        data_rows = [r for r in matrix[header_idx + 1: header_idx + 10] if any(c.strip() for c in r)]
+        if not data_rows:
             continue
+
+        # Min threshold: 1 if few rows available, 2 if more rows
+        min_score = 1 if len(data_rows) < 3 else 2
 
         date_score   = [0] * n
         amount_score = [0] * n
@@ -516,11 +571,11 @@ def _strat_data_mat(matrix):
                 text_len[i] += len(clean)
 
         best_date = max(range(n), key=lambda i: date_score[i])
-        if date_score[best_date] < 2:
+        if date_score[best_date] < min_score:
             continue
         candidates = [i for i in range(n) if i != best_date]
         best_amount = max(candidates, key=lambda i: amount_score[i], default=None)
-        if best_amount is None or amount_score[best_amount] < 2:
+        if best_amount is None or amount_score[best_amount] < min_score:
             continue
 
         cm = {'fecha': best_date, 'importe': best_amount}
